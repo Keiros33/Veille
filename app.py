@@ -3876,6 +3876,9 @@ function toggleMenu(e, id) {
 }
 function closeAllMenus() { document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open')); }
 document.addEventListener('click', closeAllMenus);
+document.addEventListener('click', function(e) {
+  if (e.target.closest('.card-pdf-btn')) e.stopPropagation();
+});
 
 function tagSingle(id) {
   closeAllMenus();
@@ -4734,7 +4737,7 @@ function renderArticles(list) {
         summary + tags +
       '</div>' +
       '<div class="card-menu-wrap" onclick="event.stopPropagation()">' +
-        (a.pdf_url ? '<a class="card-pdf-btn" href="' + a.pdf_url + '" target="_blank" rel="noopener" title="Cahier des charges / PDF" onclick="event.stopPropagation()">📄</a>' : '<span class="card-pdf-btn card-pdf-empty" title="Pas de PDF trouvé">📄</span>') +
+        (a.pdf_url ? '<a class="card-pdf-btn" href="' + a.pdf_url + '" target="_blank" rel="noopener" title="Cahier des charges / PDF" data-pdf="1">📄</a>' : '<span class="card-pdf-btn card-pdf-empty" title="Pas de PDF trouvé">📄</span>') +
         '<button class="card-menu-btn" onclick="toggleMenu(event,' + a.id + ')">&#8942;</button>' +
         '<div class="card-menu" id="menu-' + a.id + '">' +
           '<div class="card-menu-item" onclick="openArticleUrl(' + jsAttr(a.url) + ')">Ouvrir la fiche</div>' +
