@@ -4829,7 +4829,7 @@ async function _runPdfScan(ids, useAI) {
         return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">' +
           '<span style="font-size:18px">📄</span>' +
           '<div style="flex:1;min-width:0">' +
-            '<div style="font-size:12px;color:var(--text2)">Article #' + r.article_id + (r.source==="ai" ? ' <span style=\"color:var(--accent);font-size:10px\">[IA]</span>' : '') + '</div>' +
+            '<div style="font-size:12px;color:var(--text2)">Article #' + r.article_id + (r.source === 'ai' ? ' [IA]' : '') + '</div>' +
             '<a href="' + r.pdf_url + '" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">' + r.pdf_url + '</a>' +
           '</div>' +
         '</div>';
