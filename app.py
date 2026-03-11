@@ -221,8 +221,15 @@ def init_db():
         id SERIAL PRIMARY KEY, hash TEXT UNIQUE NOT NULL,
         title TEXT NOT NULL, url TEXT NOT NULL, summary TEXT,
         tags TEXT DEFAULT '[]', source TEXT, cat TEXT, region TEXT,
-        color TEXT, source_url TEXT, scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        color TEXT, source_url TEXT, scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        pdf_url TEXT DEFAULT NULL
     )""")
+    # Migration: add pdf_url if missing on existing DB
+    try:
+        cur.execute("ALTER TABLE articles ADD COLUMN IF NOT EXISTS pdf_url TEXT DEFAULT NULL")
+        conn.commit()
+    except Exception:
+        conn.rollback()
     cur.execute("""CREATE TABLE IF NOT EXISTS snapshots (
         id SERIAL PRIMARY KEY, source_url TEXT UNIQUE NOT NULL,
         content_hash TEXT, last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1633,6 +1640,15 @@ body {
 
 /* ─── 3-DOT MENU ────────────────────────── */
 .card-menu-wrap { position: relative; display: flex; flex-direction: column; gap: 5px; align-items: center; }
+.card-pdf-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 6px;
+  font-size: 15px; text-decoration: none; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border);
+  transition: background 0.15s, border-color 0.15s;
+}
+.card-pdf-btn:hover { background: var(--surface2); border-color: var(--accent); }
+.card-pdf-empty { opacity: 0.25; cursor: default; pointer-events: none; }
 .card-menu-btn {
   width: 26px; height: 26px;
   border-radius: var(--radius-sm);
@@ -2534,6 +2550,7 @@ const NanoChart = (() => {
   <button class="tab-btn" id="tab-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
   <button class="tab-btn" id="tab-database" onclick="switchTab('database')">Base de données</button>
   <button class="tab-btn" id="tab-360" onclick="switchTab('360')">Veille 360°</button>
+  <button class="tab-btn" id="tab-pdf" onclick="switchTab('pdf')">📄 Cahiers des charges</button>
 </div>
 
 <div class="app">
@@ -2716,6 +2733,26 @@ const NanoChart = (() => {
   </div>
 
   <!-- PANEL 360 -->
+  <div class="src-panel" id="panel-pdf">
+    <div class="src-topbar">
+      <span style="font-size:15px;font-weight:800;">📄 Cahiers des charges</span>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px;">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;">
+        <p style="color:var(--text2);font-size:13px;margin:0 0 16px">Recherche automatique des cahiers des charges et documents PDF liés aux articles. Sélectionnez des articles (coches) ou scannez tout.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+          <button class="btn-primary" onclick="pdfScanSelection()" id="btn-pdf-scan">🔍 Scanner la sélection</button>
+          <button class="btn-primary" onclick="pdfScanAll()" id="btn-pdf-scan-all">🔍 Scanner tous les articles</button>
+          <button style="background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600" onclick="pdfAnalyzeAI()" id="btn-pdf-ai">🤖 Analyser avec l'IA</button>
+        </div>
+        <div style="background:rgba(200,232,78,0.08);border:1px solid var(--accent3);border-radius:8px;padding:10px;font-size:12px;color:var(--text2)">
+          ⚠️ <strong style="color:var(--accent)">IA uniquement sur sélection</strong> — utilise des crédits API Claude. Le scanner simple est gratuit.
+        </div>
+      </div>
+      <div id="pdf-status" style="color:var(--text2);font-size:13px;padding:0 4px"></div>
+      <div id="pdf-results-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+  </div>
   <div class="src-panel" id="panel-360">
     <div class="src-topbar">
       <span style="font-size:15px;font-weight:800;">🔍 Veille 360° — Ingénierie financière CAPEX</span>
@@ -2788,7 +2825,7 @@ let allTags = [];
 
 // -- Tabs ----------------------------------------------------------------------
 function switchTab(tab) {
-  ['feed','sources','dashboard','database','360'].forEach(t => {
+  ['feed','sources','dashboard','database','360','pdf'].forEach(t => {
     const el = document.getElementById('tab-'+t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -2797,6 +2834,7 @@ function switchTab(tab) {
   document.getElementById('panel-dashboard').classList.toggle('active', tab === 'dashboard');
   document.getElementById('panel-database').classList.toggle('active', tab === 'database');
   document.getElementById('panel-360').classList.toggle('active', tab === '360');
+  document.getElementById('panel-pdf').classList.toggle('active', tab === 'pdf');
   if (tab === 'sources') loadSources();
   if (tab === 'dashboard') loadDashboard();
   if (tab === 'database') loadDatabase();
@@ -4696,15 +4734,116 @@ function renderArticles(list) {
         summary + tags +
       '</div>' +
       '<div class="card-menu-wrap" onclick="event.stopPropagation()">' +
+        (a.pdf_url ? '<a class="card-pdf-btn" href="' + a.pdf_url + '" target="_blank" rel="noopener" title="Cahier des charges / PDF" onclick="event.stopPropagation()">📄</a>' : '<span class="card-pdf-btn card-pdf-empty" title="Pas de PDF trouvé">📄</span>') +
         '<button class="card-menu-btn" onclick="toggleMenu(event,' + a.id + ')">&#8942;</button>' +
         '<div class="card-menu" id="menu-' + a.id + '">' +
           '<div class="card-menu-item" onclick="openArticleUrl(' + jsAttr(a.url) + ')">Ouvrir la fiche</div>' +
           '<div class="card-menu-item" onclick="collectDispositif(' + a.id + ')">Collecter le dispositif</div>' +
+          '<div class="card-menu-item" onclick="fetchPdfSingle(' + a.id + ')">🔍 Chercher le PDF</div>' +
+          '<div class="card-menu-sep"></div>' +
           '<div class="card-menu-item" onclick="tagSingle(' + a.id + ')">Tagger cet article</div>' +
         '</div>' +
       '</div>' +
     '</div>';
   }).join('');
+}
+
+
+// ── PDF / Cahiers des charges ────────────────────────────────────────────────
+
+async function fetchPdfSingle(articleId) {
+  showToast('🔍 Recherche du PDF en cours...');
+  try {
+    const res = await fetch(`${API}/api/articles/fetch-pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ article_id: articleId })
+    });
+    const data = await res.json();
+    if (data.pdf_url) {
+      showToast('✅ PDF trouvé !');
+      // Update the card icon live
+      const card = document.getElementById('card-' + articleId);
+      if (card) {
+        const emptyIcon = card.querySelector('.card-pdf-empty');
+        if (emptyIcon) {
+          const link = document.createElement('a');
+          link.className = 'card-pdf-btn';
+          link.href = data.pdf_url;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.title = 'Cahier des charges / PDF';
+          link.textContent = '📄';
+          link.onclick = function(e) { e.stopPropagation(); };
+          emptyIcon.replaceWith(link);
+        }
+      }
+    } else {
+      showToast('❌ Aucun PDF trouvé sur cette page');
+    }
+  } catch(e) { showToast('❌ Erreur lors de la recherche'); }
+}
+
+async function pdfScanSelection() {
+  const ids = Array.from(document.querySelectorAll('.card-check:checked')).map(c => parseInt(c.dataset.id));
+  if (!ids.length) { showToast('⚠️ Sélectionnez des articles d'abord (coches)'); return; }
+  await _runPdfScan(ids, false);
+}
+
+async function pdfScanAll() {
+  const ids = Array.from(document.querySelectorAll('.card-check')).map(c => parseInt(c.dataset.id));
+  if (!ids.length) { showToast('⚠️ Aucun article visible'); return; }
+  if (!confirm(`Scanner ${ids.length} articles ? Cela peut prendre quelques minutes.`)) return;
+  await _runPdfScan(ids, false);
+}
+
+async function pdfAnalyzeAI() {
+  const ids = Array.from(document.querySelectorAll('.card-check:checked')).map(c => parseInt(c.dataset.id));
+  if (!ids.length) { showToast('⚠️ Sélectionnez des articles d'abord (coches)'); return; }
+  if (!confirm(`⚠️ Cette opération utilise des crédits API Claude pour ${ids.length} article(s). Continuer ?`)) return;
+  await _runPdfScan(ids, true);
+}
+
+async function _runPdfScan(ids, useAI) {
+  const btnScan = document.getElementById('btn-pdf-scan');
+  const btnAI   = document.getElementById('btn-pdf-ai');
+  const btnAll  = document.getElementById('btn-pdf-scan-all');
+  const status  = document.getElementById('pdf-status');
+  const list    = document.getElementById('pdf-results-list');
+  [btnScan, btnAI, btnAll].forEach(b => { if(b) b.disabled = true; });
+  status.textContent = `🔍 Analyse de ${ids.length} article(s) en cours...`;
+  list.innerHTML = '';
+  try {
+    const endpoint = useAI ? '/api/articles/fetch-pdf-ai' : '/api/articles/fetch-pdf-batch';
+    const res = await fetch(`${API}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ article_ids: ids })
+    });
+    const data = await res.json();
+    const results = data.results || [];
+    const found = results.filter(r => r.pdf_url).length;
+    status.textContent = `✅ ${results.length} articles scannés — ${found} PDF trouvé(s)`;
+    list.innerHTML = results.map(r => {
+      if (r.pdf_url) {
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">' +
+          '<span style="font-size:18px">📄</span>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:12px;color:var(--text2)">Article #' + r.article_id + (r.source==="ai" ? ' <span style=\"color:var(--accent);font-size:10px\">[IA]</span>' : '') + '</div>' +
+            '<a href="' + r.pdf_url + '" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">' + r.pdf_url + '</a>' +
+          '</div>' +
+        '</div>';
+      } else {
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border-radius:8px;border:1px solid var(--border);opacity:0.5">' +
+          '<span style="font-size:18px">❌</span>' +
+          '<div style="font-size:12px;color:var(--text2)">Article #' + r.article_id + ' — aucun PDF trouvé</div>' +
+        '</div>';
+      }
+    }).join('');
+    // Reload articles to refresh PDF icons
+    await loadArticles();
+  } catch(e) { status.textContent = '❌ Erreur lors du scan'; }
+  [btnScan, btnAI, btnAll].forEach(b => { if(b) b.disabled = false; });
 }
 
 // -- Refresh -------------------------------------------------------------------
@@ -4999,6 +5138,158 @@ def save_dispositif():
     cur.execute(f"INSERT INTO dispositifs ({cols}) VALUES ({placeholders})", vals)
     conn.commit(); cur.close(); conn.close()
     return jsonify({'status':'saved'})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PDF / CAHIERS DES CHARGES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+PDF_KEYWORDS = [
+    'cahier', 'cahier-des-charges', 'reglement', 'règlement',
+    'appel-a-projets', 'appel_a_projets', 'notice', 'dossier',
+    'formulaire', 'guide', 'fiche', 'annexe', 'modalites',
+    'candidature', 'depot', 'dépôt'
+]
+
+def _scrape_pdf_url(page_url):
+    """Visit a page and find a PDF link matching keywords. Returns URL or None."""
+    try:
+        req = Request(page_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urlopen(req, timeout=10) as resp:
+            raw = resp.read(200000).decode('utf-8', errors='replace')
+        # Find all href ending in .pdf or containing keywords + .pdf
+        hrefs = re.findall(r'href=["\'](.*?)["\'\s]', raw, re.IGNORECASE)
+        # Priority 1: direct .pdf links with keyword in name
+        for href in hrefs:
+            if href.lower().endswith('.pdf'):
+                lower = href.lower()
+                if any(kw in lower for kw in PDF_KEYWORDS):
+                    if href.startswith('http'):
+                        return href
+                    elif href.startswith('/'):
+                        from urllib.parse import urlparse
+                        p = urlparse(page_url)
+                        return p.scheme + '://' + p.netloc + href
+        # Priority 2: any .pdf link
+        for href in hrefs:
+            if href.lower().endswith('.pdf'):
+                if href.startswith('http'):
+                    return href
+                elif href.startswith('/'):
+                    from urllib.parse import urlparse
+                    p = urlparse(page_url)
+                    return p.scheme + '://' + p.netloc + href
+    except Exception as e:
+        log.warning(f"PDF scrape failed for {page_url}: {e}")
+    return None
+
+def _scrape_pdf_url_ai(page_url):
+    """Use Claude to find the PDF/CDC link on a page. Returns URL or None."""
+    try:
+        req = Request(page_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urlopen(req, timeout=10) as resp:
+            raw = resp.read(100000).decode('utf-8', errors='replace')
+        # Strip tags for Claude
+        clean = re.sub(r'<[^>]+>', ' ', raw)
+        clean = re.sub(r'\s+', ' ', clean)[:6000]
+
+        payload = json.dumps({
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 300,
+            "messages": [{
+                "role": "user",
+                "content": f"""Analyse cette page web et trouve l'URL du cahier des charges, règlement, ou document PDF principal (appel à projets, dossier de candidature, notice, etc.).
+
+URL de la page : {page_url}
+
+Contenu de la page (extrait) :
+{clean}
+
+Réponds UNIQUEMENT avec l'URL complète du PDF si tu en trouves un. Si tu n'en trouves pas, réponds exactement : AUCUN"""
+            }]
+        }).encode()
+
+        api_req = Request(
+            'https://api.anthropic.com/v1/messages',
+            data=payload,
+            headers={
+                'Content-Type': 'application/json',
+                'x-api-key': ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01'
+            }
+        )
+        with urlopen(api_req, timeout=30) as resp:
+            result = json.loads(resp.read())
+        text = result['content'][0]['text'].strip()
+        if text and text != 'AUCUN' and text.startswith('http'):
+            return text
+    except Exception as e:
+        log.warning(f"AI PDF search failed: {e}")
+    return None
+
+@app.route('/api/articles/fetch-pdf', methods=['POST'])
+def fetch_pdf_single():
+    """Scraping simple pour 1 article."""
+    data = request.json or {}
+    article_id = data.get('article_id')
+    if not article_id:
+        return jsonify({'error': 'article_id required'}), 400
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT url FROM articles WHERE id=%s", (article_id,))
+    row = cur.fetchone()
+    if not row:
+        cur.close(); conn.close()
+        return jsonify({'error': 'not found'}), 404
+    pdf_url = _scrape_pdf_url(row['url'])
+    cur.execute("UPDATE articles SET pdf_url=%s WHERE id=%s", (pdf_url, article_id))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'article_id': article_id, 'pdf_url': pdf_url})
+
+@app.route('/api/articles/fetch-pdf-batch', methods=['POST'])
+def fetch_pdf_batch():
+    """Scraping simple sur une liste d'article_ids."""
+    data = request.json or {}
+    ids = data.get('article_ids', [])
+    if not ids:
+        return jsonify({'error': 'article_ids required'}), 400
+    conn = get_db(); cur = conn.cursor()
+    results = []
+    for aid in ids[:50]:  # max 50 par batch
+        cur.execute("SELECT url FROM articles WHERE id=%s", (aid,))
+        row = cur.fetchone()
+        if not row:
+            continue
+        pdf_url = _scrape_pdf_url(row['url'])
+        cur.execute("UPDATE articles SET pdf_url=%s WHERE id=%s", (pdf_url, aid))
+        results.append({'article_id': aid, 'pdf_url': pdf_url})
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'results': results, 'scanned': len(results)})
+
+@app.route('/api/articles/fetch-pdf-ai', methods=['POST'])
+def fetch_pdf_ai():
+    """Analyse Claude pour trouver le PDF (déclenchement manuel uniquement)."""
+    if not ANTHROPIC_API_KEY:
+        return jsonify({'error': 'API key not configured'}), 500
+    data = request.json or {}
+    ids = data.get('article_ids', [])
+    if not ids:
+        return jsonify({'error': 'article_ids required'}), 400
+    conn = get_db(); cur = conn.cursor()
+    results = []
+    for aid in ids[:20]:  # max 20 par appel IA (coût)
+        cur.execute("SELECT url, pdf_url FROM articles WHERE id=%s", (aid,))
+        row = cur.fetchone()
+        if not row:
+            continue
+        # Only run AI if simple scraping found nothing
+        if row['pdf_url']:
+            results.append({'article_id': aid, 'pdf_url': row['pdf_url'], 'source': 'cached'})
+            continue
+        pdf_url = _scrape_pdf_url_ai(row['url'])
+        cur.execute("UPDATE articles SET pdf_url=%s WHERE id=%s", (pdf_url, aid))
+        results.append({'article_id': aid, 'pdf_url': pdf_url, 'source': 'ai'})
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'results': results, 'scanned': len(results)})
 
 @app.route('/api/dispositifs/<int:did>', methods=['DELETE'])
 def delete_dispositif(did):
