@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: veille-substanciel
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --timeout 120
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DB_PATH
+        value: /opt/render/project/src/veille.db
