@@ -2746,9 +2746,19 @@ const NanoChart = (() => {
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;">
         <p style="color:var(--text2);font-size:13px;margin:0 0 16px">Recherche automatique des cahiers des charges et documents PDF liés aux articles. Sélectionnez des articles (coches) ou scannez tout.</p>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
-          <button class="btn-primary" onclick="cdcScanSelection()" id="btn-pdf-scan">🔍 Scanner la sélection</button>
-          <button class="btn-primary" onclick="cdcScanAll()" id="btn-pdf-scan-all">🔍 Scanner tous les articles</button>
-          <button style="background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600" onclick="cdcAnalyzeAI()" id="btn-pdf-ai">🤖 Analyser avec l'IA</button>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:200px">
+              <label style="font-size:11px;color:var(--text2);font-weight:600">Nombre d'articles à scanner : <span id="cdc-slider-val" style="color:var(--accent)">200</span> (les plus récents)</label>
+              <input type="range" id="cdc-slider" min="10" max="500" step="10" value="200"
+                style="width:100%;accent-color:var(--accent3)"
+                oninput="document.getElementById('cdc-slider-val').textContent=this.value">
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn-primary" onclick="cdcScanSelection()" id="btn-pdf-scan">🔍 Scanner la sélection cochée</button>
+            <button class="btn-primary" onclick="cdcScanAll()" id="btn-pdf-scan-all">🔍 Scanner les N plus récents</button>
+            <button style="background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600" onclick="cdcAnalyzeAI()" id="btn-pdf-ai">🤖 Analyser avec l'IA</button>
+          </div>
         </div>
         <div style="background:rgba(200,232,78,0.08);border:1px solid var(--accent3);border-radius:8px;padding:10px;font-size:12px;color:var(--text2)">
           ⚠️ <strong style="color:var(--accent)">IA uniquement sur sélection</strong> — utilise des crédits API Claude. Le scanner simple est gratuit.
@@ -4834,25 +4844,27 @@ async function cdcScanSelection() {
 }
 
 async function cdcScanAll() {
-  // Charge uniquement les IDs sans CDC depuis l'API
+  const slider = document.getElementById('cdc-slider');
+  const limit = slider ? parseInt(slider.value) : 200;
   let ids = [];
   try {
     const params = new URLSearchParams();
     if (currentFilter.cat)    params.set('cat', currentFilter.cat);
     if (currentFilter.region) params.set('region', currentFilter.region);
-    params.set('limit', '200');
+    params.set('limit', String(limit));
+    // Les plus récents en premier (ORDER BY scraped_at DESC est le défaut)
     const res = await fetch(API + '/api/articles?' + params.toString());
     const data = await res.json();
     const all = Array.isArray(data) ? data : (data.articles || []);
-    // Priorité : articles sans CDC d'abord
-    ids = all.filter(a => !a.pdf_url).map(a => a.id).filter(Boolean).slice(0, 200);
-    if (!ids.length) ids = all.map(a => a.id).filter(Boolean).slice(0, 200);
+    // Priorité articles sans CDC, sinon tous
+    const withoutCDC = all.filter(a => !a.pdf_url);
+    ids = (withoutCDC.length ? withoutCDC : all).map(a => a.id).filter(Boolean);
   } catch(e) {
     ids = Array.from(document.querySelectorAll('[id^="card-"]'))
-      .map(el => parseInt(el.id.replace('card-', ''))).filter(n => !isNaN(n)).slice(0, 200);
+      .map(el => parseInt(el.id.replace('card-', ''))).filter(n => !isNaN(n)).slice(0, limit);
   }
-  if (!ids.length) { showToast('Aucun article visible dans la Veille'); return; }
-  if (!confirm('Scanner ' + ids.length + ' articles sans CDC ? (~2 min en arrière-plan)')) return;
+  if (!ids.length) { showToast('Aucun article à scanner'); return; }
+  if (!confirm('Scanner ' + ids.length + ' articles (les plus récents) en arrière-plan ?')) return;
   await _runCDCScan(ids, false);
 }
 
