@@ -442,7 +442,7 @@ def get_articles():
         p.extend([s,s,s,s])
     if tag: q+=' AND tags LIKE %s'; p.append(f'%{tag}%')
     has_tags=request.args.get('has_tags')
-    if has_tags: q+=" AND tags IS NOT NULL AND tags != ''"
+    if has_tags: q+=" AND tags IS NOT NULL AND tags != '[]' AND tags != ''"
     q+=' ORDER BY scraped_at DESC LIMIT %s OFFSET %s'; p.extend([limit,page*limit])
     conn=get_db(); cur=conn.cursor(); cur.execute(q,p)
     rows=cur.fetchall(); cur.close(); conn.close()
