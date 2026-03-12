@@ -396,7 +396,17 @@ def scrape_source(source):
                     VALUES (%s,%s,%s,%s,'[]',%s,%s,%s,%s,%s) ON CONFLICT (hash) DO NOTHING""",
                     (h,item['title'],item['url'],summary,source['name'],source['cat'],
                      source.get('region',''),CAT_COLORS.get(source['cat'],'#4b5a75'),source['url']))
-                if cur.rowcount > 0: new_count += 1
+                if cur.rowcount > 0:
+                    new_count += 1
+                    # Auto-tag nouveaux articles
+                    try:
+                        tags = tag_article_by_data(item['title'], summary, source['name'],
+                                                   source['cat'], source.get('region',''), item['url'])
+                        if tags:
+                            cur.execute("UPDATE articles SET tags=%s WHERE hash=%s",
+                                       (json.dumps(tags, ensure_ascii=False), h))
+                    except Exception as te:
+                        log.warning(f"Auto-tag: {te}")
             except Exception as e:
                 log.warning(f"Insert: {e}"); conn.rollback()
         cur.execute("""INSERT INTO snapshots (source_url,content_hash,last_checked,status,error_count)
@@ -2613,6 +2623,9 @@ const NanoChart = (() => {
       <button class="btn-tag-sel" id="btn-tag" onclick="tagSelected()" disabled>
         🏷 Tagger la sélection
       </button>
+      <button class="btn-tag-sel" id="btn-collect-sel" onclick="collectSelection()" disabled style="background:var(--surface);border-color:var(--accent3);color:var(--accent);margin-left:6px">
+        📥 Collecter la sélection
+      </button>
     </div>
     <div class="tag-progress" id="tag-progress">
       <span id="tag-prog-text">Tagging en cours…</span>
@@ -3909,7 +3922,40 @@ let currentCollectData = null;
 const GRID_FIELDS = ['guichet_financeur','guichet_instructeur','titre','nature','beneficiaire','type_depot','date_fermeture','objectif','types_depenses','operations_eligibles','depenses_eligibles','criteres_eligibilite','depenses_ineligibles','montants_taux','thematiques','territoire','points_vigilance','contact','programme_europeen'];
 const GRID_LABELS = {guichet_financeur:'Guichet financeur',guichet_instructeur:'Guichet instructeur',titre:'Titre',nature:'Nature',beneficiaire:'Bénéficiaire',type_depot:'Type de dépôt',date_fermeture:'Date de fermeture',objectif:'Objectif',types_depenses:'Types de dépenses',operations_eligibles:'Opérations éligibles',depenses_eligibles:'Dépenses éligibles',criteres_eligibilite:"Critères d'éligibilité",depenses_ineligibles:'Dépenses inéligibles',montants_taux:"Montants et taux d'aide",thematiques:'Thématiques',territoire:'Territoire concerné',points_vigilance:'Points de vigilance',contact:'Contact',programme_europeen:'Programme européen'};
 
-async function collectDispositif(articleId) {
+async async function collectSelection() {
+  const ids = Array.from(selectedIds);
+  if (!ids.length) return;
+  if (!confirm('Collecter automatiquement ' + ids.length + ' dispositif(s) via l'IA ? Cela utilisera des crédits Claude.')) return;
+
+  const btn = document.getElementById('btn-collect-sel');
+  btn.disabled = true;
+  btn.textContent = '⏳ Collecte en cours…';
+
+  let done = 0, errors = 0;
+  for (const id of ids) {
+    const art = articles.find(a => a.id === id);
+    if (!art) continue;
+    btn.textContent = '⏳ ' + (done+1) + '/' + ids.length + ' en cours…';
+    try {
+      const res = await fetch(API + '/api/collect', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: art.title, url: art.url, summary: art.summary || '', article_id: id})
+      });
+      const data = await res.json();
+      if (data.error) { errors++; }
+      else { done++; }
+    } catch(e) { errors++; }
+  }
+
+  btn.textContent = '📥 Collecter la sélection';
+  btn.disabled = selectedIds.size === 0;
+  showToast('✅ ' + done + ' dispositif(s) collecté(s)' + (errors ? ' — ' + errors + ' erreur(s)' : ''));
+  // Rafraîchir la base de données
+  await loadDatabase();
+}
+
+function collectDispositif(articleId) {
   closeAllMenus();
   const art = articles.find(a => a.id === articleId);
   if (!art) return;
@@ -3991,7 +4037,7 @@ function renderDatabase(list) {
     cols.map(c => '<th>' + c[1] + '</th>').join('') + '<th>Actions</th></tr></thead><tbody>' +
     list.map(d => '<tr>' +
       cols.map(c => { const v=d[c[0]]; const e=!v||v==='Information non fournie'; return '<td><div class="db-cell' + (e?' db-empty':'') + '">' + (v||'—') + '</div></td>'; }).join('') +
-      '<td><button class="db-btn-sm" onclick="viewDispositif(' + d.id + ')">👁</button><button class="db-btn-sm db-btn-del" onclick="deleteDispositif(' + d.id + ')">✕</button></td></tr>'
+      '<td style="white-space:nowrap"><button class="db-btn-sm" onclick="viewDispositif(' + d.id + ')" title="Voir">👁</button><button class="db-btn-sm" onclick="exportPptx(' + d.id + ')" title="Export PPTX" style="margin:0 3px">📊</button><button class="db-btn-sm db-btn-del" onclick="deleteDispositif(' + d.id + ')" title="Supprimer">✕</button></td></tr>'
     ).join('') + '</tbody></table></div>';
 }
 
@@ -4110,6 +4156,7 @@ function updateSelUI() {
   const n = selectedIds.size;
   document.getElementById('sel-count').textContent = n;
   document.getElementById('btn-tag').disabled = n === 0;
+  const btnCS = document.getElementById('btn-collect-sel'); if (btnCS) btnCS.disabled = n === 0;
   const allSel = articles.length > 0 && n === articles.length;
   const btn = document.getElementById('btn-sel-toggle');
   const icon = document.getElementById('sel-toggle-icon');
