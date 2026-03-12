@@ -435,7 +435,7 @@ def get_articles():
     q='SELECT * FROM articles WHERE 1=1'; p=[]
     if cat: q+=' AND cat=%s'; p.append(cat)
     if region: q+=' AND region=%s'; p.append(region)
-    if has_cdc=='1': q+=' AND pdf_url IS NOT NULL AND pdf_url != '''
+    if has_cdc=='1': q+=" AND pdf_url IS NOT NULL AND pdf_url != ''"
     if search:
         s=f'%{search}%'
         q+=' AND (title ILIKE %s OR summary ILIKE %s OR source ILIKE %s OR region ILIKE %s)'
@@ -4823,24 +4823,25 @@ async function cdcScanSelection() {
 }
 
 async function cdcScanAll() {
-  // Charge les IDs depuis l'API (filtre actif) plutôt que le DOM
+  // Charge uniquement les IDs sans CDC depuis l'API
   let ids = [];
   try {
     const params = new URLSearchParams();
     if (currentFilter.cat)    params.set('cat', currentFilter.cat);
     if (currentFilter.region) params.set('region', currentFilter.region);
-    params.set('limit', '100');
+    params.set('limit', '200');
     const res = await fetch(API + '/api/articles?' + params.toString());
     const data = await res.json();
-    ids = (data.articles || data || []).map(a => a.id).filter(Boolean);
+    const all = Array.isArray(data) ? data : (data.articles || []);
+    // Priorité : articles sans CDC d'abord
+    ids = all.filter(a => !a.pdf_url).map(a => a.id).filter(Boolean).slice(0, 200);
+    if (!ids.length) ids = all.map(a => a.id).filter(Boolean).slice(0, 200);
   } catch(e) {
-    // Fallback DOM
     ids = Array.from(document.querySelectorAll('[id^="card-"]'))
-      .map(el => parseInt(el.id.replace('card-', '')))
-      .filter(n => !isNaN(n));
+      .map(el => parseInt(el.id.replace('card-', ''))).filter(n => !isNaN(n)).slice(0, 200);
   }
   if (!ids.length) { showToast('Aucun article visible dans la Veille'); return; }
-  if (!confirm('Scanner ' + ids.length + ' articles ? (max 30, ~1 min)')) return;
+  if (!confirm('Scanner ' + ids.length + ' articles sans CDC ? (~2 min en arrière-plan)')) return;
   await _runCDCScan(ids, false);
 }
 
@@ -5344,21 +5345,26 @@ Réponds UNIQUEMENT avec l'URL complète du PDF si tu en trouves un. Si tu n'en 
 
 @app.route('/api/articles/fetch-pdf', methods=['POST'])
 def fetch_pdf_single():
-    """Scraping simple pour 1 article."""
+    """Scraping simple pour 1 article — synchrone car 1 seule page."""
     data = request.json or {}
     article_id = data.get('article_id')
     if not article_id:
         return jsonify({'error': 'article_id required'}), 400
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT url, title FROM articles WHERE id=%s", (article_id,))
-    row = cur.fetchone()
-    if not row:
-        cur.close(); conn.close()
-        return jsonify({'error': 'not found'}), 404
-    doc_url = _scrape_pdf_url(row['url'])
-    cur.execute("UPDATE articles SET pdf_url=%s WHERE id=%s", (doc_url, article_id))
-    conn.commit(); cur.close(); conn.close()
-    return jsonify({'article_id': article_id, 'pdf_url': doc_url, 'doc_url': doc_url, 'title': row['title']})
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("SELECT url, title FROM articles WHERE id=%s", (article_id,))
+        row = cur.fetchone()
+        if not row:
+            cur.close(); conn.close()
+            return jsonify({'error': 'not found'}), 404
+        doc_url = _scrape_pdf_url(row['url'])
+        cur.execute("UPDATE articles SET pdf_url=%s WHERE id=%s", (doc_url, article_id))
+        conn.commit(); cur.close(); conn.close()
+        log.info(f"CDC single scan #{article_id}: {doc_url}")
+        return jsonify({'article_id': article_id, 'pdf_url': doc_url, 'doc_url': doc_url, 'title': row['title']})
+    except Exception as e:
+        log.error(f"CDC single error: {e}")
+        return jsonify({'error': str(e), 'pdf_url': None, 'doc_url': None}), 200
 
 # ── CDC scan job state ──────────────────────────────────────────────────────
 _cdc_job = {'status': 'idle', 'done': 0, 'total': 0, 'results': [], 'error': None}
