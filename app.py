@@ -4021,15 +4021,18 @@ async function init() {
   try {
     await Promise.race([
       Promise.all([loadStats(), loadNav(), loadTags()]),
-      new Promise((_,reject) => setTimeout(() => reject(new Error('timeout')), 10000))
+      new Promise((_,reject) => setTimeout(() => reject(new Error('timeout')), 30000))
     ]);
     await loadArticles();
   } catch(e) {
     console.error('Init error:', e);
-    document.getElementById('feed').innerHTML = '<div class="state-box"><p>❌ Erreur de chargement — <button class="btn btn-primary" onclick="init()" style="margin-left:8px">Réessayer</button></p></div>';
+    const isTimeout = e.message === 'timeout';
+    document.getElementById('feed').innerHTML = '<div class="state-box"><p>' +
+      (isTimeout ? '⏳ Le serveur démarre, merci de patienter...' : '❌ Erreur de chargement') +
+      ' <button class="btn btn-primary" onclick="init()" style="margin-left:8px">Réessayer</button></p></div>';
+    if (isTimeout) setTimeout(init, 5000);
   }
 }
-
 
 
 // -- Selection -----------------------------------------------------------------
