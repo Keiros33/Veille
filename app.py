@@ -3922,7 +3922,7 @@ let currentCollectData = null;
 const GRID_FIELDS = ['guichet_financeur','guichet_instructeur','titre','nature','beneficiaire','type_depot','date_fermeture','objectif','types_depenses','operations_eligibles','depenses_eligibles','criteres_eligibilite','depenses_ineligibles','montants_taux','thematiques','territoire','points_vigilance','contact','programme_europeen'];
 const GRID_LABELS = {guichet_financeur:'Guichet financeur',guichet_instructeur:'Guichet instructeur',titre:'Titre',nature:'Nature',beneficiaire:'Bénéficiaire',type_depot:'Type de dépôt',date_fermeture:'Date de fermeture',objectif:'Objectif',types_depenses:'Types de dépenses',operations_eligibles:'Opérations éligibles',depenses_eligibles:'Dépenses éligibles',criteres_eligibilite:"Critères d'éligibilité",depenses_ineligibles:'Dépenses inéligibles',montants_taux:"Montants et taux d'aide",thematiques:'Thématiques',territoire:'Territoire concerné',points_vigilance:'Points de vigilance',contact:'Contact',programme_europeen:'Programme européen'};
 
-async async function collectSelection() {
+async function collectSelection() {
   const ids = Array.from(selectedIds);
   if (!ids.length) return;
   if (!confirm('Collecter automatiquement ' + ids.length + ' dispositif(s) via l'IA ? Cela utilisera des crédits Claude.')) return;
