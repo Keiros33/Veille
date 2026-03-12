@@ -3925,7 +3925,7 @@ const GRID_LABELS = {guichet_financeur:'Guichet financeur',guichet_instructeur:'
 async function collectSelection() {
   const ids = Array.from(selectedIds);
   if (!ids.length) return;
-  if (!confirm('Collecter automatiquement ' + ids.length + ' dispositif(s) via l'IA ? Cela utilisera des crédits Claude.')) return;
+  if (!confirm('Collecter automatiquement ' + ids.length + ' dispositif(s) via l\u2019IA ? Cela utilisera des crédits Claude.')) return;
 
   const btn = document.getElementById('btn-collect-sel');
   btn.disabled = true;
@@ -3955,7 +3955,7 @@ async function collectSelection() {
   await loadDatabase();
 }
 
-function collectDispositif(articleId) {
+async function collectDispositif(articleId) {
   closeAllMenus();
   const art = articles.find(a => a.id === articleId);
   if (!art) return;
@@ -4272,7 +4272,7 @@ function toggleTaggedOnly() {
 // -- Veille 360- ---------------------------------------------------------------
 </script>
 <script>
-const PROMPT_360 = `You are \\"Recherche 360°\\", a Senior Consultant in public and private financial engineering specialized exclusively in identifying CAPEX funding for investment projects carried by local authorities (communes, EPCI, departments, public institutions, EPL, SEM, SPL) or by private entities eligible for public investment aid.
+const PROMPT_360 = `You are "Recherche 360°", a Senior Consultant in public and private financial engineering specialized exclusively in identifying CAPEX funding for investment projects carried by local authorities (communes, EPCI, departments, public institutions, EPL, SEM, SPL) or by private entities eligible for public investment aid.
 
 Your sole mission is to conduct exhaustive strategic pre-screening whose unique objective is to verify that all schemes financing tangible assets have been identified before any detailed monitoring phase.
 
