@@ -2817,7 +2817,7 @@ window.onerror = function(msg, src, line, col, err) {
     + '</div>';
   return true;
 };
-const API = 'https://veille-sub.onrender.com';
+const API = '';
 
 let navData = {};
 let currentFilter = { cat: null, region: null };
@@ -4792,7 +4792,18 @@ async function fetchCDC(articleId) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({article_id: articleId})
     });
+    if (!res.ok) { showToast('❌ Erreur serveur ' + res.status); return; }
     const data = await res.json();
+    // Debug info dans la console
+    if (data.debug) {
+      console.log('[CDC Debug]', data.debug);
+      if (data.debug.error) console.warn('[CDC Error]', data.debug.error);
+      if (data.debug.ext_links) console.log('[CDC Links trouvés]', data.debug.ext_links);
+    }
+    if (data.error && !data.pdf_url) {
+      showToast('❌ ' + data.error);
+      return;
+    }
     if (data.pdf_url) {
       showToast('✅ Document trouvé !');
       // Update card icon live
@@ -5345,7 +5356,7 @@ Réponds UNIQUEMENT avec l'URL complète du PDF si tu en trouves un. Si tu n'en 
 
 @app.route('/api/articles/fetch-pdf', methods=['POST'])
 def fetch_pdf_single():
-    """Scraping simple pour 1 article — synchrone car 1 seule page."""
+    """Scraping pour 1 article avec debug détaillé."""
     data = request.json or {}
     article_id = data.get('article_id')
     if not article_id:
@@ -5357,13 +5368,42 @@ def fetch_pdf_single():
         if not row:
             cur.close(); conn.close()
             return jsonify({'error': 'not found'}), 404
-        doc_url = _scrape_pdf_url(row['url'])
+        page_url = row['url']
+        doc_url = None
+        debug_info = {'page_url': page_url, 'links_found': 0, 'error': None}
+        try:
+            req = Request(page_url, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            })
+            with urlopen(req, timeout=8) as resp:
+                raw = resp.read(400000).decode('utf-8', errors='replace')
+            links = re.findall(r'<a[^>]+href=["\'\s]?([^"\'\s>]+)["\'\s>][^>]*>(.*?)</a>',
+                               raw, re.IGNORECASE | re.DOTALL)
+            debug_info['links_found'] = len(links)
+            # Collect all candidates for debug
+            all_ext_links = []
+            for href, text in links:
+                href = href.strip()
+                if not href or href.startswith('#') or href.startswith('mailto'):
+                    continue
+                lower_href = href.lower().split('?')[0]
+                if any(lower_href.endswith(ext) for ext in CDC_DOC_EXTENSIONS):
+                    abs_href = _make_absolute(href, page_url)
+                    text_clean = re.sub(r'<[^>]+>', ' ', text).strip()[:60]
+                    all_ext_links.append({'href': abs_href, 'text': text_clean})
+            debug_info['ext_links'] = all_ext_links[:10]
+            doc_url = _scrape_pdf_url(page_url)
+        except Exception as e:
+            debug_info['error'] = str(e)
+            log.error(f"CDC scrape error #{article_id}: {e}")
         cur.execute("UPDATE articles SET pdf_url=%s WHERE id=%s", (doc_url, article_id))
         conn.commit(); cur.close(); conn.close()
-        log.info(f"CDC single scan #{article_id}: {doc_url}")
-        return jsonify({'article_id': article_id, 'pdf_url': doc_url, 'doc_url': doc_url, 'title': row['title']})
+        log.info(f"CDC #{article_id}: {doc_url} | debug={debug_info}")
+        return jsonify({'article_id': article_id, 'pdf_url': doc_url, 'doc_url': doc_url,
+                        'title': row['title'], 'debug': debug_info})
     except Exception as e:
-        log.error(f"CDC single error: {e}")
+        log.error(f"CDC route error: {e}")
         return jsonify({'error': str(e), 'pdf_url': None, 'doc_url': None}), 200
 
 # ── CDC scan job state ──────────────────────────────────────────────────────
