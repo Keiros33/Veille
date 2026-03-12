@@ -4789,7 +4789,7 @@ async function fetchPdfSingle(articleId) {
 
 async function pdfScanSelection() {
   const ids = Array.from(document.querySelectorAll('.card-check:checked')).map(c => parseInt(c.dataset.id));
-  if (!ids.length) { showToast('⚠️ Sélectionnez des articles d'abord (coches)'); return; }
+  if (!ids.length) { showToast('⚠️ Sélectionnez des articles d’abord (coches)'); return; }
   await _runPdfScan(ids, false);
 }
 
@@ -4802,7 +4802,7 @@ async function pdfScanAll() {
 
 async function pdfAnalyzeAI() {
   const ids = Array.from(document.querySelectorAll('.card-check:checked')).map(c => parseInt(c.dataset.id));
-  if (!ids.length) { showToast('⚠️ Sélectionnez des articles d'abord (coches)'); return; }
+  if (!ids.length) { showToast('⚠️ Sélectionnez des articles d’abord (coches)'); return; }
   if (!confirm(`⚠️ Cette opération utilise des crédits API Claude pour ${ids.length} article(s). Continuer ?`)) return;
   await _runPdfScan(ids, true);
 }
