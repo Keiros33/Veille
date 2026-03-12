@@ -4799,7 +4799,7 @@ async function fetchCDC(articleId) {
 
 async function cdcScanSelection() {
   const ids = Array.from(document.querySelectorAll('.card-check:checked')).map(c => parseInt(c.dataset.id));
-  if (!ids.length) { showToast('Cochez des articles dans l\'onglet Veille'); return; }
+  if (!ids.length) { showToast("Cochez des articles dans l'onglet Veille"); return; }
   await _runCDCScan(ids, false);
 }
 
@@ -4815,7 +4815,7 @@ async function cdcScanAll() {
 
 async function cdcAnalyzeAI() {
   const ids = Array.from(document.querySelectorAll('.card-check:checked')).map(c => parseInt(c.dataset.id));
-  if (!ids.length) { showToast('Cochez des articles dans l\'onglet Veille'); return; }
+  if (!ids.length) { showToast("Cochez des articles dans l'onglet Veille"); return; }
   if (!confirm('Analyse IA sur ' + ids.length + ' article(s) — utilise des credits Claude. Continuer ?')) return;
   await _runCDCScan(ids, true);
 }
