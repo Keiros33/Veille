@@ -853,6 +853,873 @@ def export_pptx(did):
         log.error(f"PPTX export error: {e}")
         return jsonify({'error': str(e)}), 500
 
+CONSULTANT_PAGE = """<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubstanCiel — Espace Consultants</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── RESET & VARS ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #f4f3ef;
+  --surface:   #ffffff;
+  --surface2:  #f0efe9;
+  --border:    #e2e0d8;
+  --text:      #1a1a18;
+  --text2:     #5a5a52;
+  --muted:     #9a9a90;
+  --accent:    #1a3c2e;
+  --lime:      #c8e84e;
+  --lime-soft: #e8f5b0;
+  --tag-bg:    #eef7d8;
+  --tag-act:   #1a3c2e;
+  --tag-text:  #2a5c3e;
+  --radius:    8px;
+  --radius-lg: 14px;
+  --shadow:    0 2px 12px rgba(0,0,0,0.07);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  --sidebar-w: 300px;
+  --header-h:  58px;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── HEADER ───────────────────────────────────────────────────────── */
+.header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--header-h);
+  background: var(--accent);
+  display: flex; align-items: center;
+  padding: 0 24px; gap: 16px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.15);
+}
+.header-logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800; font-size: 20px;
+  color: var(--lime); letter-spacing: -0.5px;
+}
+.header-tag {
+  font-size: 11px; font-weight: 500;
+  color: rgba(200,232,78,0.6);
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.header-tabs {
+  display: flex; gap: 4px; margin-left: auto;
+}
+.header-tab {
+  padding: 6px 16px; border-radius: 100px;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer; border: none;
+  background: transparent; color: rgba(255,255,255,0.6);
+  transition: all 0.15s; font-family: 'DM Sans', sans-serif;
+}
+.header-tab:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.header-tab.active { background: var(--lime); color: var(--accent); }
+
+.header-search {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 100px; padding: 5px 14px;
+  margin-left: 12px;
+}
+.header-search input {
+  background: none; border: none; outline: none;
+  color: #fff; font-size: 12px; font-family: 'DM Sans', sans-serif;
+  width: 200px;
+}
+.header-search input::placeholder { color: rgba(255,255,255,0.4); }
+.header-search-icon { font-size: 13px; opacity: 0.5; }
+
+/* ── LAYOUT ───────────────────────────────────────────────────────── */
+.layout {
+  display: flex;
+  padding-top: var(--header-h);
+  min-height: 100vh;
+}
+
+/* ── SIDEBAR FILTRES ──────────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  position: fixed;
+  top: var(--header-h); bottom: 0;
+  overflow-y: auto;
+  padding: 16px 0;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.sidebar-header {
+  padding: 0 16px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sidebar-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.sidebar-clear {
+  font-size: 11px; color: var(--text2); cursor: pointer;
+  padding: 3px 8px; border-radius: 4px;
+  background: var(--surface2); border: none;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.15s;
+}
+.sidebar-clear:hover { background: #ffe0e0; color: #c44; }
+
+.filter-group { margin-bottom: 4px; }
+.filter-group-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 16px; cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.filter-group-header:hover { background: var(--surface2); }
+.filter-group-label {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--muted); flex: 1;
+}
+.filter-group-count {
+  font-size: 10px; font-weight: 700;
+  background: var(--lime); color: var(--accent);
+  border-radius: 100px; padding: 1px 6px;
+  display: none;
+}
+.filter-group-count.show { display: inline; }
+.filter-group-arrow { font-size: 10px; color: var(--muted); transition: transform 0.2s; }
+.filter-group.open .filter-group-arrow { transform: rotate(90deg); }
+
+.filter-tags {
+  display: none; flex-wrap: wrap; gap: 5px;
+  padding: 6px 16px 10px;
+}
+.filter-group.open .filter-tags { display: flex; }
+
+.filter-tag {
+  padding: 4px 10px; border-radius: 100px;
+  font-size: 11px; font-weight: 500; cursor: pointer;
+  background: var(--surface2); color: var(--text2);
+  border: 1.5px solid transparent;
+  transition: all 0.12s; user-select: none;
+}
+.filter-tag:hover { border-color: var(--accent); color: var(--accent); }
+.filter-tag.active {
+  background: var(--accent); color: var(--lime);
+  border-color: var(--accent);
+}
+
+/* Logic toggle */
+.filter-logic-wrap {
+  display: none; align-items: center; gap: 6px;
+  padding: 0 16px 8px;
+  font-size: 10px; color: var(--muted);
+}
+.filter-group.open .filter-logic-wrap { display: flex; }
+.logic-btn {
+  padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;
+  cursor: pointer; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--muted);
+  font-family: 'DM Sans', sans-serif; transition: all 0.12s;
+  letter-spacing: 0.05em;
+}
+.logic-btn.active { background: var(--accent); color: var(--lime); border-color: var(--accent); }
+
+/* ── MAIN CONTENT ─────────────────────────────────────────────────── */
+.main {
+  flex: 1;
+  margin-left: var(--sidebar-w);
+  padding: 20px 24px;
+  max-width: 900px;
+}
+
+/* ── STATS ROW ────────────────────────────────────────────────────── */
+.stats-row {
+  display: flex; gap: 10px; margin-bottom: 20px;
+}
+.stat-chip {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 16px;
+  display: flex; flex-direction: column; gap: 2px;
+  flex: 1;
+}
+.stat-chip-val {
+  font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px;
+  color: var(--accent);
+}
+.stat-chip-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ── PANELS ───────────────────────────────────────────────────────── */
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ── SORT ROW ─────────────────────────────────────────────────────── */
+.sort-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 14px;
+}
+.sort-label { font-size: 11px; color: var(--muted); }
+.sort-btn {
+  padding: 4px 12px; border-radius: 100px;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  border: 1.5px solid var(--border);
+  background: var(--surface); color: var(--text2);
+  transition: all 0.12s; font-family: 'DM Sans', sans-serif;
+}
+.sort-btn.active { background: var(--accent); color: var(--lime); border-color: var(--accent); }
+.result-count { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+/* ── ARTICLE CARDS ────────────────────────────────────────────────── */
+.articles-list { display: flex; flex-direction: column; gap: 10px; }
+
+.article-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  transition: all 0.15s;
+  cursor: pointer;
+  text-decoration: none; color: inherit;
+  display: block;
+  position: relative;
+  overflow: hidden;
+}
+.article-card::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--border); border-radius: 3px 0 0 3px;
+  transition: background 0.15s;
+}
+.article-card:hover { box-shadow: var(--shadow); border-color: #d0cfc7; transform: translateY(-1px); }
+.article-card:hover::before { background: var(--lime); }
+.article-card.is-dispositif::before { background: var(--lime); }
+
+.article-card-top {
+  display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px;
+}
+.article-card-source {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--muted);
+  white-space: nowrap; margin-top: 2px;
+}
+.article-card-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px;
+  line-height: 1.35; color: var(--text); flex: 1;
+}
+.article-card-date {
+  font-size: 10px; color: var(--muted); white-space: nowrap; margin-top: 2px;
+}
+.article-card-summary {
+  font-size: 12px; color: var(--text2); line-height: 1.55;
+  margin-bottom: 10px; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.article-card-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.article-tag {
+  padding: 3px 8px; border-radius: 100px;
+  font-size: 10px; font-weight: 600;
+  background: var(--tag-bg); color: var(--tag-text);
+}
+.article-tag.ref { background: var(--accent); color: var(--lime); }
+.article-tag.cdc { background: #e8f0ff; color: #2244aa; }
+
+.article-card-actions {
+  position: absolute; right: 14px; top: 14px;
+  display: flex; gap: 6px; opacity: 0; transition: opacity 0.15s;
+}
+.article-card:hover .article-card-actions { opacity: 1; }
+.card-action-btn {
+  width: 28px; height: 28px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; cursor: pointer; transition: all 0.12s;
+}
+.card-action-btn:hover { background: var(--surface2); border-color: var(--accent); }
+
+/* ── DISPOSITIF CARDS ─────────────────────────────────────────────── */
+.disp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+
+.disp-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 16px;
+  display: flex; flex-direction: column; gap: 8px;
+  transition: all 0.15s;
+}
+.disp-card:hover { box-shadow: var(--shadow); border-color: #d0cfc7; transform: translateY(-1px); }
+
+.disp-card-header {
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.disp-card-icon {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--tag-bg); display: flex; align-items: center;
+  justify-content: center; font-size: 18px; flex-shrink: 0;
+}
+.disp-card-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px;
+  line-height: 1.3; color: var(--text);
+}
+.disp-card-financeur { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.disp-field { display: flex; flex-direction: column; gap: 2px; }
+.disp-field-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.disp-field-val { font-size: 11px; color: var(--text2); line-height: 1.4; }
+.disp-field-val.empty { color: var(--muted); font-style: italic; }
+
+.disp-card-footer {
+  margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border);
+  display: flex; gap: 6px;
+}
+.disp-btn {
+  flex: 1; padding: 6px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border); background: var(--surface2);
+  color: var(--text2); transition: all 0.12s; font-family: 'DM Sans', sans-serif;
+  text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 4px;
+}
+.disp-btn:hover { background: var(--accent); color: var(--lime); border-color: var(--accent); }
+.disp-btn.primary { background: var(--accent); color: var(--lime); border-color: var(--accent); }
+.disp-btn.primary:hover { opacity: 0.88; }
+
+/* ── CDC CARDS ────────────────────────────────────────────────────── */
+.cdc-list { display: flex; flex-direction: column; gap: 8px; }
+.cdc-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 14px 16px;
+  display: flex; align-items: center; gap: 14px;
+  transition: all 0.15s;
+}
+.cdc-card:hover { box-shadow: var(--shadow); border-color: #d0cfc7; }
+.cdc-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: #e8f0ff; display: flex; align-items: center;
+  justify-content: center; font-size: 20px; flex-shrink: 0;
+}
+.cdc-info { flex: 1; min-width: 0; }
+.cdc-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px;
+  color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cdc-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.cdc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.cdc-btn {
+  padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border); background: var(--surface2);
+  color: var(--text2); transition: all 0.12s; font-family: 'DM Sans', sans-serif;
+  text-decoration: none; display: flex; align-items: center; gap: 4px;
+}
+.cdc-btn:hover { background: #e8f0ff; color: #2244aa; border-color: #b0c8ff; }
+.cdc-btn.dl { background: var(--accent); color: var(--lime); border-color: var(--accent); }
+.cdc-btn.dl:hover { opacity: 0.88; }
+
+/* ── EMPTY STATE ──────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center; padding: 60px 20px;
+  color: var(--muted); font-size: 14px;
+}
+.empty-state-icon { font-size: 40px; margin-bottom: 12px; }
+.empty-state-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 16px; color: var(--text2); margin-bottom: 6px; }
+
+/* ── SPINNER ──────────────────────────────────────────────────────── */
+.spinner {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 3px solid var(--border); border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite; margin: 40px auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── MODAL ────────────────────────────────────────────────────────── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.4); align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg); max-width: 680px; width: 90vw;
+  max-height: 85vh; overflow-y: auto; padding: 28px;
+}
+.modal-title {
+  font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px;
+  color: var(--accent); margin-bottom: 20px;
+}
+.modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.modal-field { display: flex; flex-direction: column; gap: 4px; }
+.modal-field.full { grid-column: 1 / -1; }
+.modal-field-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.modal-field-val { font-size: 13px; color: var(--text); line-height: 1.5; }
+.modal-field-val.empty { color: var(--muted); font-style: italic; font-size: 12px; }
+.modal-footer { margin-top: 24px; display: flex; gap: 8px; justify-content: flex-end; }
+.modal-close {
+  padding: 8px 20px; border-radius: var(--radius); font-size: 13px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border); background: var(--surface2);
+  color: var(--text); font-family: 'DM Sans', sans-serif; transition: all 0.15s;
+}
+.modal-close:hover { background: var(--surface); }
+.modal-pptx {
+  padding: 8px 20px; border-radius: var(--radius); font-size: 13px; font-weight: 600;
+  cursor: pointer; border: none; background: var(--accent);
+  color: var(--lime); font-family: 'DM Sans', sans-serif; transition: all 0.15s;
+}
+.modal-pptx:hover { opacity: 0.88; }
+
+/* ── TOAST ────────────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 999;
+  background: var(--accent); color: var(--lime);
+  padding: 10px 18px; border-radius: var(--radius);
+  font-size: 13px; font-weight: 600;
+  box-shadow: var(--shadow-lg);
+  transform: translateY(80px); opacity: 0;
+  transition: all 0.25s cubic-bezier(.34,1.56,.64,1);
+  pointer-events: none;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+
+/* ── RESPONSIVE ───────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  :root { --sidebar-w: 0px; }
+  .sidebar { display: none; }
+  .main { margin-left: 0; }
+}
+
+/* ── LOAD ANIMATION ───────────────────────────────────────────────── */
+.article-card { animation: fadeUp 0.3s ease both; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-logo">SubstanCiel</div>
+  <div class="header-tag">Espace Consultants</div>
+  <nav class="header-tabs">
+    <button class="header-tab active" onclick="switchTab('veille', this)">📰 Veille</button>
+    <button class="header-tab" onclick="switchTab('dispositifs', this)">🗄 Dispositifs</button>
+    <button class="header-tab" onclick="switchTab('cdc', this)">📋 Cahiers des charges</button>
+  </nav>
+  <div class="header-search">
+    <span class="header-search-icon">🔍</span>
+    <input type="text" id="search" placeholder="Rechercher…" oninput="onSearch()">
+  </div>
+</header>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR FILTRES -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Filtres</span>
+      <button class="sidebar-clear" onclick="clearAllFilters()">✕ Tout effacer</button>
+    </div>
+    <div id="filter-groups">
+      <!-- Généré par JS -->
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- STATS -->
+    <div class="stats-row">
+      <div class="stat-chip"><div class="stat-chip-val" id="st-articles">—</div><div class="stat-chip-lbl">Articles</div></div>
+      <div class="stat-chip"><div class="stat-chip-val" id="st-dispositifs">—</div><div class="stat-chip-lbl">Dispositifs</div></div>
+      <div class="stat-chip"><div class="stat-chip-val" id="st-cdc">—</div><div class="stat-chip-lbl">Cahiers</div></div>
+      <div class="stat-chip"><div class="stat-chip-val" id="st-today">—</div><div class="stat-chip-lbl">Aujourd'hui</div></div>
+    </div>
+
+    <!-- PANEL VEILLE -->
+    <div class="panel active" id="panel-veille">
+      <div class="sort-row">
+        <span class="sort-label">Trier par</span>
+        <button class="sort-btn active" onclick="setSort('date', this)">Date</button>
+        <button class="sort-btn" onclick="setSort('dispositif', this)">Dispositifs d'abord</button>
+        <span class="result-count" id="result-count">— articles</span>
+      </div>
+      <div class="articles-list" id="articles-list">
+        <div class="spinner"></div>
+      </div>
+    </div>
+
+    <!-- PANEL DISPOSITIFS -->
+    <div class="panel" id="panel-dispositifs">
+      <div class="sort-row">
+        <span class="result-count" id="disp-count">— dispositifs</span>
+      </div>
+      <div class="disp-grid" id="disp-grid">
+        <div class="spinner"></div>
+      </div>
+    </div>
+
+    <!-- PANEL CDC -->
+    <div class="panel" id="panel-cdc">
+      <div class="sort-row">
+        <span class="result-count" id="cdc-count">— documents</span>
+      </div>
+      <div class="cdc-list" id="cdc-list">
+        <div class="spinner"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL DISPOSITIF -->
+<div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Dispositif</div>
+    <div class="modal-grid" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="modal-close" onclick="closeModal()">Fermer</button>
+      <button class="modal-pptx" id="modal-pptx-btn" onclick="exportDispPptx()">📊 Exporter PPTX</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+
+// ── STATE ────────────────────────────────────────────────────────────
+let allArticles = [];
+let allDispositifs = [];
+let activeTab = 'veille';
+let sortMode = 'date';
+let searchQ = '';
+let currentDispId = null;
+
+// Tag filters : { groupKey: { logic: 'OR'|'AND', active: Set } }
+const filterState = {};
+
+// ── TAG BANK ─────────────────────────────────────────────────────────
+const TAG_GROUPS = [
+  { key: 'ref',     label: '⭐ Type',     tags: ['⭐ Dispositif', '⭐ Actualité'] },
+  { key: 'qui',     label: '👥 QUI',      tags: ['Association','Collectivité','Entreprise','PME','TPE','ETI','GE','Start-up','Salariés','SENIORS','Jeunesse','ESS/Insertion','Lauréats','CSE','DRH','Etat','Union européenne'] },
+  { key: 'quoi',    label: '🏭 QUOI',     tags: ['Agriculture','Alimentation durable','Artisanat/Commerce','Industrie','Industrie agroalimentaire','Mer / Littoral / Pêche / Aquaculture','Logement / Bâtiment / Construction durable','Mobilité','Tourisme','Thermalisme','Culture','Culture / Audiovisuel','Sport','Numérique','Numérique responsable / IA / Data','Énergie / Décarbonation / Sobriété','Biogaz biomasse','Sylviculture','Gestion du littoral','habitat inclusif','Médico-social'] },
+  { key: 'que',     label: '🎯 QUE',      tags: ['Transition écologique','Transition énergétique','Adaptation au changement climatique','Biodiversité','Environnement','développement durable','Économie circulaire / Déchet','Innovation','Recherche','Inclusion sociale','cohésion sociale','Santé','Emploi / Formation','Formation','Education','Entrepreneuriat','Développement économique','Développement territorial','Aménagement du territoire','Politique culturelle','Sobriété foncière','Renaturation','Résilience agricole','Catastrophes naturelles','Cybersécurité','Sécurité / Défense / Souveraineté','Réforme / Réglementation','Dialogue social','Sensibilisation','Tendance de fond'] },
+  { key: 'ou',      label: '🗺 OÙ',       tags: ['National','Europe','Union européenne','Régions','Auvergne-Rhône-Alpes','Bourgogne-Franche-Comté','Bretagne','Centre-Val de Loire','Corse','Grand Est','Hauts-de-France','Île-de-France','Normandie','Nouvelle-Aquitaine','Occitanie','Pays de la Loire','Sud - PACA','Guadeloupe','Guyane','La Réunion','Martinique','Mayotte','Vendée','Hérault','Italie','Périgord','QPV'] },
+  { key: 'comment', label: '💰 COMMENT',  tags: ['AAP','AMI','AO','ADEME','Agence de l\'eau','Banque des territoires','Bpifrance','Caisse des dépôts','ANR','Aract','Dares','DDETS','DREETS','CNSA','CRESS','DILCRAH','FDVA','FEADER','FEDER','FSE','FSE+','France 2030','fonds chaleur','Financement régional','Subvention','Prêt','Avance remboursable','Crédit d\'impôt','Crédit-bail','Fonds propres','Investissement','Investissement public','PTCE','LEADER','ALCOTRA','ODDS','CARSAT','FEAMPA','Fonds Barnier'] },
+  { key: 'quand',   label: '📅 QUAND',    tags: ['En continu','En expérimentation','PLF 2026','Clôture 2026','Clôture 2027','Clôture 2028','Clôture août 2026','Clôture avril 2026','Clôture décembre 2025','Clôture décembre 2026','Clôture février 2026','Clôture janvier 2026','Clôture juillet 2026','Clôture juin 2026','Clôture mai 2026','Clôture mars 2026','Clôture novembre 2026','Clôture octobre 2026','Clôture septembre 2026'] },
+];
+
+// Init filter state
+TAG_GROUPS.forEach(g => {
+  filterState[g.key] = { logic: 'OR', active: new Set() };
+});
+
+// ── INIT ─────────────────────────────────────────────────────────────
+async function init() {
+  buildSidebar();
+  await Promise.all([loadArticles(), loadDispositifs()]);
+}
+
+// ── SIDEBAR ───────────────────────────────────────────────────────────
+function buildSidebar() {
+  const container = document.getElementById('filter-groups');
+  container.innerHTML = TAG_GROUPS.map(g => `
+    <div class="filter-group" id="fg-${g.key}">
+      <div class="filter-group-header" onclick="toggleGroup('${g.key}')">
+        <span class="filter-group-label">${g.label}</span>
+        <span class="filter-group-count" id="fc-${g.key}">0</span>
+        <span class="filter-group-arrow">›</span>
+      </div>
+      <div class="filter-logic-wrap">
+        <span style="font-size:10px;color:var(--muted)">Logique :</span>
+        <button class="logic-btn active" id="logic-or-${g.key}" onclick="setLogic('${g.key}','OR',event)">OU</button>
+        <button class="logic-btn" id="logic-and-${g.key}" onclick="setLogic('${g.key}','AND',event)">ET</button>
+      </div>
+      <div class="filter-tags" id="ft-${g.key}">
+        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag('${g.key}','${t.replace(/'/g,"\\'")}',this)">${t}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+  // Open first group by default
+  toggleGroup('ref');
+}
+
+function toggleGroup(key) {
+  document.getElementById('fg-' + key).classList.toggle('open');
+}
+
+function setLogic(key, logic, e) {
+  e.stopPropagation();
+  filterState[key].logic = logic;
+  document.getElementById('logic-or-' + key).classList.toggle('active', logic === 'OR');
+  document.getElementById('logic-and-' + key).classList.toggle('active', logic === 'AND');
+  applyFilters();
+}
+
+function toggleTag(groupKey, tag, el) {
+  const s = filterState[groupKey].active;
+  if (s.has(tag)) { s.delete(tag); el.classList.remove('active'); }
+  else { s.add(tag); el.classList.add('active'); }
+  // Update count badge
+  const count = s.size;
+  const badge = document.getElementById('fc-' + groupKey);
+  badge.textContent = count;
+  badge.classList.toggle('show', count > 0);
+  applyFilters();
+}
+
+function clearAllFilters() {
+  TAG_GROUPS.forEach(g => {
+    filterState[g.key].active.clear();
+    document.getElementById('fc-' + g.key).classList.remove('show');
+    document.querySelectorAll(`#ft-${g.key} .filter-tag`).forEach(el => el.classList.remove('active'));
+  });
+  applyFilters();
+}
+
+// ── LOAD DATA ─────────────────────────────────────────────────────────
+async function loadArticles() {
+  try {
+    const res = await fetch(API + '/api/articles?limit=300');
+    allArticles = await res.json();
+    updateStats();
+    applyFilters();
+  } catch(e) {
+    document.getElementById('articles-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Erreur de chargement</div></div>';
+  }
+}
+
+async function loadDispositifs() {
+  try {
+    const res = await fetch(API + '/api/dispositifs');
+    allDispositifs = await res.json();
+    document.getElementById('st-dispositifs').textContent = allDispositifs.length;
+    renderDispositifs(allDispositifs);
+  } catch(e) {}
+}
+
+function updateStats() {
+  document.getElementById('st-articles').textContent = allArticles.length;
+  const today = new Date().toDateString();
+  const todayCount = allArticles.filter(a => new Date(a.scraped_at).toDateString() === today).length;
+  document.getElementById('st-today').textContent = todayCount;
+  const cdcCount = allArticles.filter(a => a.pdf_url).length;
+  document.getElementById('st-cdc').textContent = cdcCount;
+  renderCDC(allArticles.filter(a => a.pdf_url));
+}
+
+// ── FILTERING ─────────────────────────────────────────────────────────
+function applyFilters() {
+  let filtered = allArticles;
+
+  // Search
+  if (searchQ) {
+    const q = searchQ.toLowerCase();
+    filtered = filtered.filter(a =>
+      (a.title||'').toLowerCase().includes(q) ||
+      (a.summary||'').toLowerCase().includes(q) ||
+      (a.source||'').toLowerCase().includes(q)
+    );
+  }
+
+  // Tag filters
+  TAG_GROUPS.forEach(g => {
+    const active = filterState[g.key].active;
+    if (!active.size) return;
+    const logic = filterState[g.key].logic;
+    filtered = filtered.filter(a => {
+      const tags = JSON.parse(a.tags || '[]');
+      if (logic === 'OR') return [...active].some(t => tags.includes(t));
+      else return [...active].every(t => tags.includes(t));
+    });
+  });
+
+  // Sort
+  if (sortMode === 'date') {
+    filtered.sort((a,b) => new Date(b.scraped_at) - new Date(a.scraped_at));
+  } else {
+    filtered.sort((a,b) => {
+      const ad = (JSON.parse(a.tags||'[]')).includes('⭐ Dispositif');
+      const bd = (JSON.parse(b.tags||'[]')).includes('⭐ Dispositif');
+      if (ad && !bd) return -1; if (!ad && bd) return 1;
+      return new Date(b.scraped_at) - new Date(a.scraped_at);
+    });
+  }
+
+  document.getElementById('result-count').textContent = filtered.length + ' article' + (filtered.length > 1 ? 's' : '');
+  renderArticles(filtered);
+}
+
+// ── RENDER ARTICLES ───────────────────────────────────────────────────
+function renderArticles(list) {
+  const container = document.getElementById('articles-list');
+  if (!list.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔎</div><div class="empty-state-title">Aucun article trouvé</div><p>Essayez d\'élargir vos filtres</p></div>';
+    return;
+  }
+  container.innerHTML = list.map((a, i) => {
+    const tags = JSON.parse(a.tags || '[]');
+    const isDisp = tags.includes('⭐ Dispositif');
+    const date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR', {day:'numeric',month:'short'}) : '';
+    const tagsHtml = tags.map(t => {
+      const cls = t.startsWith('⭐') ? 'ref' : t === '📋 CDC' ? 'cdc' : '';
+      return `<span class="article-tag ${cls}">${t}</span>`;
+    }).join('');
+    const cdcBadge = a.pdf_url ? `<span class="article-tag cdc">📋 CDC</span>` : '';
+    return `<a class="article-card${isDisp?' is-dispositif':''}" href="${a.url}" target="_blank" rel="noopener" style="animation-delay:${Math.min(i*0.03,0.4)}s">
+      <div class="article-card-top">
+        <div>
+          <div class="article-card-source">${a.source||''}</div>
+          <div class="article-card-date">${date}</div>
+        </div>
+        <div class="article-card-title">${a.title}</div>
+      </div>
+      ${a.summary ? `<div class="article-card-summary">${a.summary}</div>` : ''}
+      <div class="article-card-tags">${tagsHtml}${cdcBadge}</div>
+    </a>`;
+  }).join('');
+}
+
+// ── RENDER DISPOSITIFS ────────────────────────────────────────────────
+function renderDispositifs(list) {
+  const container = document.getElementById('disp-grid');
+  document.getElementById('disp-count').textContent = list.length + ' dispositif' + (list.length > 1 ? 's' : '');
+  if (!list.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🗄</div><div class="empty-state-title">Aucun dispositif collecté</div></div>';
+    return;
+  }
+  container.innerHTML = list.map(d => {
+    const empty = v => !v || v === 'Information non fournie';
+    return `<div class="disp-card">
+      <div class="disp-card-header">
+        <div class="disp-card-icon">💰</div>
+        <div>
+          <div class="disp-card-title">${d.titre || 'Dispositif'}</div>
+          <div class="disp-card-financeur">${d.guichet_financeur || ''}</div>
+        </div>
+      </div>
+      ${!empty(d.beneficiaire) ? `<div class="disp-field"><div class="disp-field-label">Bénéficiaires</div><div class="disp-field-val">${d.beneficiaire}</div></div>` : ''}
+      ${!empty(d.montants_taux) ? `<div class="disp-field"><div class="disp-field-label">Montants & taux</div><div class="disp-field-val">${d.montants_taux}</div></div>` : ''}
+      ${!empty(d.date_fermeture) ? `<div class="disp-field"><div class="disp-field-label">Clôture</div><div class="disp-field-val">${d.date_fermeture}</div></div>` : ''}
+      <div class="disp-card-footer">
+        <button class="disp-btn primary" onclick="openDispModal(${d.id})">👁 Voir le détail</button>
+        <a class="disp-btn" href="/api/dispositifs/${d.id}/export-pptx" target="_blank">📊 PPTX</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── RENDER CDC ────────────────────────────────────────────────────────
+function renderCDC(list) {
+  const container = document.getElementById('cdc-list');
+  document.getElementById('cdc-count').textContent = list.length + ' document' + (list.length > 1 ? 's' : '');
+  if (!list.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-title">Aucun cahier des charges trouvé</div><p>Lancez une analyse CDC depuis l\'espace de veille</p></div>';
+    return;
+  }
+  container.innerHTML = list.map(a => {
+    const ext = (a.pdf_url||'').split('.').pop().toUpperCase().slice(0,4);
+    const date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR') : '';
+    return `<div class="cdc-card">
+      <div class="cdc-icon">📄</div>
+      <div class="cdc-info">
+        <div class="cdc-title">${a.title}</div>
+        <div class="cdc-meta">${a.source || ''} · ${date} · ${ext || 'DOC'}</div>
+      </div>
+      <div class="cdc-actions">
+        <a class="cdc-btn" href="${a.url}" target="_blank" rel="noopener">🔗 Fiche</a>
+        <a class="cdc-btn dl" href="${a.pdf_url}" target="_blank" rel="noopener" download>⬇ Télécharger</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── MODAL DISPOSITIF ──────────────────────────────────────────────────
+function openDispModal(id) {
+  const d = allDispositifs.find(x => x.id === id);
+  if (!d) return;
+  currentDispId = id;
+  document.getElementById('modal-title').textContent = '💰 ' + (d.titre || 'Dispositif');
+  const fields = [
+    ['Guichet financeur', d.guichet_financeur],
+    ['Guichet instructeur', d.guichet_instructeur],
+    ['Nature', d.nature],
+    ['Bénéficiaires', d.beneficiaire],
+    ['Type de dépôt', d.type_depot],
+    ['Date de clôture', d.date_fermeture],
+    ['Montants & taux', d.montants_taux],
+    ['Territoire', d.territoire],
+    ['Thématiques', d.thematiques],
+    ['Objectif', d.objectif, true],
+    ['Dépenses éligibles', d.depenses_eligibles, true],
+    ['Critères d\'éligibilité', d.criteres_eligibilite, true],
+    ['Points de vigilance', d.points_vigilance, true],
+    ['Contact', d.contact],
+  ];
+  const empty = v => !v || v === 'Information non fournie';
+  document.getElementById('modal-body').innerHTML = fields.map(([label, val, full]) => {
+    const isEmpty = empty(val);
+    return `<div class="modal-field${full ? ' full' : ''}">
+      <div class="modal-field-label">${label}</div>
+      <div class="modal-field-val${isEmpty ? ' empty' : ''}">${isEmpty ? 'Non renseigné' : val}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+function exportDispPptx() {
+  if (currentDispId) window.open(API + '/api/dispositifs/' + currentDispId + '/export-pptx', '_blank');
+}
+
+// ── NAV ───────────────────────────────────────────────────────────────
+function switchTab(tab, btn) {
+  activeTab = tab;
+  document.querySelectorAll('.header-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+}
+
+function setSort(mode, btn) {
+  sortMode = mode;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+let searchTimer;
+function onSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    searchQ = document.getElementById('search').value.trim();
+    applyFilters();
+  }, 250);
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── START ─────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>"""
+
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -5254,6 +6121,10 @@ def api_reorder_sources():
             (item.get('url'),item.get('cat',''),item.get('region',''),item.get('sort_order',0)))
     conn.commit(); conn.close()
     return jsonify({'ok':True})
+
+@app.route('/consultant')
+def consultant():
+    return CONSULTANT_PAGE, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 @app.route('/')
 def index():
