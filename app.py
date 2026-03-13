@@ -986,6 +986,14 @@ body {
 .filter-group.locked > .filter-group-header { opacity: .3; pointer-events: none; cursor: not-allowed; }
 .filter-group.locked > .filter-tags { display: none !important; }
 .filter-group.locked > .filter-logic-wrap { display: none !important; }
+.section-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); padding: 14px 0 6px; display: flex; align-items: center; gap: 8px; }
+.section-count { background: var(--lime); color: var(--accent); border-radius: 100px; padding: 1px 8px; font-size: 10px; font-weight: 800; }
+.card-collect-row { padding: 8px 0 0; }
+.btn-collect { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; border: 1.5px solid var(--accent); background: var(--surface); color: var(--accent); font-family: 'DM Sans', sans-serif; transition: all .15s; white-space: nowrap; }
+.btn-collect:hover:not(:disabled) { background: var(--accent); color: var(--lime); }
+.btn-collect:disabled { opacity: .55; cursor: default; }
+.disp-btn.cdc { border-color: #1a6bb5; color: #1a6bb5; }
+.disp-btn.cdc:hover { background: #1a6bb5; color: #fff; }
 .filter-group-header {
   display: flex; align-items: center; gap: 6px;
   padding: 8px 16px; cursor: pointer;
@@ -1429,11 +1437,37 @@ TAG_GROUPS.forEach(g => {
 });
 
 // ── INIT ─────────────────────────────────────────────────────────────
+
+function collectFromVeille(e) {
+  e.stopPropagation(); e.preventDefault();
+  var btn = e.currentTarget;
+  var url = btn.getAttribute('data-url');
+  var title = btn.getAttribute('data-title');
+  var artId = btn.getAttribute('data-id');
+  btn.disabled = true;
+  btn.textContent = '⏳ Collecte…';
+  fetch(API + '/api/collect', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({url: url, title: title, id: artId})
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.status === 'duplicate') {
+      btn.textContent = '✓ Déjà collecté';
+      btn.style.cssText = 'background:#e8f5b0;color:#3a6020;border-color:#3a6020';
+    } else if (d.error) {
+      btn.textContent = '⚠ Erreur'; btn.disabled = false;
+    } else {
+      btn.textContent = '✅ Collecté !';
+      btn.style.cssText = 'background:var(--lime);color:var(--accent)';
+      loadDispositifs();
+      showToast('Dispositif ajouté à la base !');
+    }
+  }).catch(function(){ btn.textContent = '⚠ Erreur réseau'; btn.disabled = false; });
+}
 async function init() {
   buildSidebar();
   updateLockState();
-  await loadArticles();
-  loadDispositifs();
+  await Promise.all([loadArticles(), loadDispositifs()]);
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────────────
@@ -1515,43 +1549,15 @@ async function loadArticles() {
 }
 
 async function loadDispositifs() {
-  renderDispositivsFromArticles();
-}
-
-function renderDispositivsFromArticles() {
-  var DISP_TAG = '⭐ Dispositif';
-  var list = allArticles.filter(function(a) {
-    var t = Array.isArray(a.tags) ? a.tags : (JSON.parse(a.tags||'[]'));
-    return t.indexOf(DISP_TAG) >= 0;
-  });
-  document.getElementById('st-dispositifs').textContent = list.length;
-  var container = document.getElementById('disp-grid');
-  document.getElementById('disp-count').textContent = list.length + ' dispositif' + (list.length > 1 ? 's' : '');
-  if (!list.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128452;</div><div class="empty-state-title">Aucun dispositif tagé</div><p>Les articles tagés ⭐ Dispositif apparaissent ici</p></div>';
-    return;
-  }
-  container.innerHTML = list.map(function(a) {
-    var tags = Array.isArray(a.tags) ? a.tags : (JSON.parse(a.tags||'[]'));
-    var date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR', {day:'numeric',month:'short',year:'numeric'}) : '';
-    var otherTags = tags.filter(function(t){ return !t.startsWith('⭐'); });
-    var tagsHtml = otherTags.map(function(t){ return '<span class="article-tag">' + t + '</span>'; }).join('');
-    var cdcBadge = a.pdf_url ? '<span class="article-tag cdc">CDC</span>' : '';
-    var cdcBtn = a.pdf_url ? '<a class="disp-btn" href="' + a.pdf_url + '" target="_blank">↓ CDC</a>' : '';
-    return '<div class="disp-card">'
-      + '<div class="disp-card-header"><div class="disp-card-icon">&#128176;</div>'
-      + '<div><div class="disp-card-title">' + a.title + '</div>'
-      + '<div class="disp-card-financeur">' + (a.source||'') + ' · ' + date + '</div></div></div>'
-      + '<div class="disp-field" style="flex-wrap:wrap;flex-direction:row;gap:4px;margin-top:4px">' + tagsHtml + cdcBadge + '</div>'
-      + '<div class="disp-card-footer">'
-      + '<a class="disp-btn primary" href="' + a.url + '" target="_blank" rel="noopener">Consulter</a>'
-      + cdcBtn
-      + '</div></div>';
-  }).join('');
+  try {
+    const res = await fetch(API + '/api/dispositifs');
+    allDispositifs = await res.json();
+    document.getElementById('st-dispositifs').textContent = allDispositifs.length;
+    renderDispositifs(allDispositifs);
+  } catch(e) {}
 }
 
 function updateStats() {
-  renderDispositivsFromArticles();
   document.getElementById('st-articles').textContent = allArticles.length;
   const today = new Date().toDateString();
   const todayCount = allArticles.filter(a => new Date(a.scraped_at).toDateString() === today).length;
@@ -1581,7 +1587,7 @@ function applyFilters() {
     if (!active.size) return;
     const logic = filterState[g.key].logic;
     filtered = filtered.filter(a => {
-      const tags = Array.isArray(a.tags) ? a.tags : (JSON.parse(a.tags||'[]'));
+      const tags = Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]');
       if (logic === 'OR') return [...active].some(t => tags.includes(t));
       else return [...active].every(t => tags.includes(t));
     });
@@ -1592,8 +1598,8 @@ function applyFilters() {
     filtered.sort((a,b) => new Date(b.scraped_at) - new Date(a.scraped_at));
   } else {
     filtered.sort((a,b) => {
-      const ad = (Array.isArray(a.tags)?a.tags:(JSON.parse(a.tags||'[]'))).includes('⭐ Dispositif');
-      const bd = (Array.isArray(b.tags)?b.tags:(JSON.parse(b.tags||'[]'))).includes('⭐ Dispositif');
+      const ad = (Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]')).includes('⭐ Dispositif');
+      const bd = (Array.isArray(b.tags)?b.tags:JSON.parse(b.tags||'[]')).includes('⭐ Dispositif');
       if (ad && !bd) return -1; if (!ad && bd) return 1;
       return new Date(b.scraped_at) - new Date(a.scraped_at);
     });
@@ -1605,20 +1611,37 @@ function applyFilters() {
 
 // ── RENDER ARTICLES ───────────────────────────────────────────────────
 function renderArticles(list) {
+  const DISP = '⭐ Dispositif', ACT = '⭐ Actualité';
+  const disps = list.filter(a => { const t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.indexOf(DISP)>=0; });
+  const acts  = list.filter(a => { const t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.indexOf(ACT)>=0; });
   const container = document.getElementById('articles-list');
-  if (!list.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔎</div><div class="empty-state-title">Aucun article trouvé</div><p>Essayez d’élargir vos filtres</p></div>';
+  if (!disps.length && !acts.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Aucun résultat</div><p>Sélectionnez ⭐ Dispositif ou ⭐ Actualité dans les filtres</p></div>';
     return;
   }
-  container.innerHTML = list.map((a, i) => {
-    const tags = Array.isArray(a.tags) ? a.tags : (JSON.parse(a.tags||'[]'));
+  let html = '';
+  if (disps.length) {
+    html += '<div class="section-label">⭐ Dispositifs <span class="section-count">'+disps.length+'</span></div>';
+    html += renderArticleCards(disps, true);
+  }
+  if (acts.length) {
+    html += '<div class="section-label">������ Actualités <span class="section-count">'+acts.length+'</span></div>';
+    html += renderArticleCards(acts, false);
+  }
+  container.innerHTML = html;
+}
+
+function renderArticleCards(list, showCollect) {
+  return list.map((a, i) => {
+    const tags = Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]');
     const isDisp = tags.includes('⭐ Dispositif');
     const date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR', {day:'numeric',month:'short'}) : '';
-    const tagsHtml = tags.map(t => {
-      const cls = t.startsWith('⭐') ? 'ref' : t === '📋 CDC' ? 'cdc' : '';
-      return `<span class="article-tag ${cls}">${t}</span>`;
+    const tagsHtml = tags.filter(t => !t.startsWith('⭐')).map(t => {
+      return `<span class="article-tag">${t}</span>`;
     }).join('');
-    const cdcBadge = a.pdf_url ? `<span class="article-tag cdc">📋 CDC</span>` : '';
+    const typeTag = tags.find(t => t.startsWith('⭐'));
+    const typeBadge = typeTag ? `<span class="article-tag ref">${typeTag}</span>` : '';
+    const collectBtn = showCollect ? `<div class="card-collect-row" onclick="event.preventDefault()"><button class="btn-collect" data-url="${a.url}" data-title="${(a.title||'').replace(/"/g,'&quot;')}" data-id="${a.id||0}" onclick="collectFromVeille(event)">⌨ Collecter</button></div>` : '';
     return `<a class="article-card${isDisp?' is-dispositif':''}" href="${a.url}" target="_blank" rel="noopener" style="animation-delay:${Math.min(i*0.03,0.4)}s">
       <div class="article-card-top">
         <div>
@@ -1628,7 +1651,8 @@ function renderArticles(list) {
         <div class="article-card-title">${a.title}</div>
       </div>
       ${a.summary ? `<div class="article-card-summary">${a.summary}</div>` : ''}
-      <div class="article-card-tags">${tagsHtml}${cdcBadge}</div>
+      <div class="article-card-tags">${typeBadge}${tagsHtml}</div>
+      ${collectBtn}
     </a>`;
   }).join('');
 }
@@ -1655,8 +1679,10 @@ function renderDispositifs(list) {
       ${!empty(d.montants_taux) ? `<div class="disp-field"><div class="disp-field-label">Montants & taux</div><div class="disp-field-val">${d.montants_taux}</div></div>` : ''}
       ${!empty(d.date_fermeture) ? `<div class="disp-field"><div class="disp-field-label">Clôture</div><div class="disp-field-val">${d.date_fermeture}</div></div>` : ''}
       <div class="disp-card-footer">
-        <button class="disp-btn primary" onclick="openDispModal(${d.id})">👁 Voir le détail</button>
-        <a class="disp-btn" href="/api/dispositifs/${d.id}/export-pptx" target="_blank">📊 PPTX</a>
+        <button class="disp-btn primary" onclick="openDispModal(${d.id})">👁️ Détail</button>
+        ${d.source_url ? `<a class="disp-btn" href="${d.source_url}" target="_blank" rel="noopener">������ Source</a>` : ''}
+        ${d.source_url ? `<button class="disp-btn cdc" onclick="fetchCdcForDisp(event,'${d.source_url}')">������ CDC</button>` : ''}
+        <a class="disp-btn" href="/api/dispositifs/${d.id}/export-pptx" target="_blank">������ PPTX</a>
       </div>
     </div>`;
   }).join('');
@@ -6267,6 +6293,12 @@ def save_dispositif():
     cols = ','.join(fields)
     placeholders = ','.join(['%s']*len(fields))
     vals = [data.get(f,'') for f in fields]
+    src_url = data.get('source_url','')
+    if src_url:
+        cur.execute("SELECT id FROM dispositifs WHERE source_url=%s", (src_url,))
+        if cur.fetchone():
+            cur.close(); conn.close()
+            return jsonify({'status':'duplicate','message':'Déjà dans la base'}), 200
     cur.execute(f"INSERT INTO dispositifs ({cols}) VALUES ({placeholders})", vals)
     conn.commit(); cur.close(); conn.close()
     return jsonify({'status':'saved'})
