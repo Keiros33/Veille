@@ -1565,7 +1565,7 @@ function applyFilters() {
 function renderArticles(list) {
   const container = document.getElementById('articles-list');
   if (!list.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔎</div><div class="empty-state-title">Aucun article trouvé</div><p>Essayez d\'élargir vos filtres</p></div>';
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔎</div><div class="empty-state-title">Aucun article trouvé</div><p>Essayez d’élargir vos filtres</p></div>';
     return;
   }
   container.innerHTML = list.map((a, i) => {
@@ -1625,7 +1625,7 @@ function renderCDC(list) {
   const container = document.getElementById('cdc-list');
   document.getElementById('cdc-count').textContent = list.length + ' document' + (list.length > 1 ? 's' : '');
   if (!list.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-title">Aucun cahier des charges trouvé</div><p>Lancez une analyse CDC depuis l\'espace de veille</p></div>';
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-title">Aucun cahier des charges trouvé</div><p>Lancez une analyse CDC depuis l’espace de veille</p></div>';
     return;
   }
   container.innerHTML = list.map(a => {
@@ -1663,7 +1663,7 @@ function openDispModal(id) {
     ['Thématiques', d.thematiques],
     ['Objectif', d.objectif, true],
     ['Dépenses éligibles', d.depenses_eligibles, true],
-    ['Critères d\'éligibilité', d.criteres_eligibilite, true],
+    ['Critères d’éligibilité', d.criteres_eligibilite, true],
     ['Points de vigilance', d.points_vigilance, true],
     ['Contact', d.contact],
   ];
