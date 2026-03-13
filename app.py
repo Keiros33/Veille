@@ -398,15 +398,6 @@ def scrape_source(source):
                      source.get('region',''),CAT_COLORS.get(source['cat'],'#4b5a75'),source['url']))
                 if cur.rowcount > 0:
                     new_count += 1
-                    # Auto-tag nouveaux articles
-                    try:
-                        tags = tag_article_by_data(item['title'], summary, source['name'],
-                                                   source['cat'], source.get('region',''), item['url'])
-                        if tags:
-                            cur.execute("UPDATE articles SET tags=%s WHERE hash=%s",
-                                       (json.dumps(tags, ensure_ascii=False), h))
-                    except Exception as te:
-                        log.warning(f"Auto-tag: {te}")
             except Exception as e:
                 log.warning(f"Insert: {e}"); conn.rollback()
         cur.execute("""INSERT INTO snapshots (source_url,content_hash,last_checked,status,error_count)
@@ -1472,12 +1463,40 @@ body {
 
 /* ─── SELECTION BAR ─────────────────────── */
 .toolbar-sel {
-  display: flex; align-items: center; gap: 8px;
-  padding: 7px 16px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
 }
+.sel-divider { width: 1px; height: 16px; background: var(--border); margin: 0 4px; }
+.sel-dropdown-wrap { position: relative; }
+.sel-filter-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 100px;
+  font-size: 11px; font-weight: 600;
+  cursor: pointer; border: 1.5px solid var(--border);
+  background: var(--surface2); color: var(--text);
+  transition: all 0.15s; font-family: "DM Sans", sans-serif;
+}
+.sel-filter-btn:hover { border-color: var(--accent3); }
+.sel-filter-btn.has-active { border-color: var(--lime); background: var(--accent); color: var(--lime); }
+.sel-dropdown {
+  display: none; position: fixed; z-index: 9999;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  min-width: 200px; overflow: hidden;
+}
+.sel-dropdown.open { display: block; }
+.sel-drop-item {
+  padding: 9px 14px; font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  color: var(--text); transition: background 0.1s;
+  font-family: "DM Sans", sans-serif;
+}
+.sel-drop-item:hover { background: var(--surface2); }
+.sel-drop-item.active { color: var(--accent); font-weight: 700; }
+.sel-drop-check { font-size: 14px; width: 16px; }
 .sel-toggle-btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 5px 12px;
@@ -1503,8 +1522,8 @@ body {
 }
 .sel-count-badge strong { color: var(--accent); font-weight: 700; }
 .btn-tag-sel {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 14px;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 12px;
   border-radius: 100px;
   font-size: 11px; font-weight: 700;
   cursor: pointer;
@@ -1513,26 +1532,9 @@ body {
   color: var(--lime);
   transition: all 0.15s;
   font-family: 'DM Sans', sans-serif;
-  margin-left: auto;
 }
-.btn-tag-sel:hover { background: var(--accent2); border-color: var(--accent2); }
-.btn-tag-sel:disabled { opacity: 0.35; cursor: not-allowed; background: var(--surface2); border-color: var(--border); color: var(--muted); }
-
-
-/* ─── BUTTONS ───────────────────────────── */
-.btn {
-  padding: 6px 13px;
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  transition: all 0.15s;
-  font-family: 'DM Sans', sans-serif;
-  display: inline-flex; align-items: center; gap: 5px;
-}
+.btn-tag-sel:hover { opacity: 0.88; }
+.btn-tag-sel:disabled { opacity: 0.35; cursor: not-allowed; }
 .btn:hover { background: var(--surface2); border-color: var(--accent3); color: var(--accent); }
 .btn-primary {
   background: var(--accent);
@@ -1673,11 +1675,11 @@ body {
 .card-menu-btn:hover { background: var(--surface); border-color: var(--accent3); color: var(--accent); }
 .card-menu {
   display: none;
-  position: absolute; top: 100%; right: 0;
+  position: fixed;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  min-width: 175px; z-index: 100;
+  min-width: 185px; z-index: 9999;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
@@ -2598,13 +2600,7 @@ const NanoChart = (() => {
         <span class="search-icon">🔍</span>
         <input type="text" id="search" placeholder="Rechercher titre, source, région…" oninput="onSearch()" />
       </div>
-      <div class="breadcrumb" id="breadcrumb">📂 <strong>Tous les articles</strong></div>
-      <button class="btn btn-primary" id="btn-refresh" onclick="doRefresh()">
-        <span class="spin" id="spin">↻</span> Actualiser
-      </button>
-      <button class="btn" id="btn-cdc-filter" onclick="toggleCDCFilter()" title="Afficher uniquement les articles avec un cahier des charges trouvé" style="background:var(--surface);border:1px solid var(--border);color:var(--text2);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.15s">
-        📋 CDC seulement
-      </button>
+      <span class="spin" id="spin" style="font-size:16px;color:var(--muted);display:none;animation:spin 1s linear infinite">↻</span>
     </div>
 
     <div class="stats-row">
@@ -2616,15 +2612,39 @@ const NanoChart = (() => {
     </div>
     
     <div class="toolbar-sel" id="sel-toolbar">
+      <!-- Sélection -->
       <button class="sel-toggle-btn" id="btn-sel-toggle" onclick="toggleSelectAll()">
-        <span id="sel-toggle-icon">☐</span> Tout sélectionner
+        <span id="sel-toggle-icon">☐</span> Tout
       </button>
-      <span class="sel-count-badge"><strong id="sel-count">0</strong> article(s) sélectionné(s)</span>
-      <button class="btn-tag-sel" id="btn-tag" onclick="tagSelected()" disabled>
-        🏷 Tagger la sélection
+      <span class="sel-count-badge" id="sel-count-wrap" style="display:none">
+        <strong id="sel-count">0</strong> sél.
+      </span>
+
+      <div class="sel-divider"></div>
+
+      <!-- Filtres dropdown -->
+      <div class="sel-dropdown-wrap" id="filter-dropdown-wrap">
+        <button class="sel-filter-btn" id="btn-filter-drop" onclick="toggleFilterDrop()">
+          Filtres <span id="filter-active-dot" style="display:none;width:6px;height:6px;border-radius:50%;background:var(--lime);display:inline-block;margin-left:3px;vertical-align:middle"></span> ▾
+        </button>
+        <div class="sel-dropdown" id="filter-dropdown">
+          <div class="sel-drop-item" id="drop-tagged" onclick="toggleTaggedOnly()">
+            <span class="sel-drop-check" id="check-tagged">○</span> ⭐ Taggerés uniquement
+          </div>
+          <div class="sel-drop-item" id="drop-cdc" onclick="toggleCDCFilter()">
+            <span class="sel-drop-check" id="check-cdc">○</span> 📋 CDC trouvé uniquement
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:1"></div>
+
+      <!-- Actions (visibles quand sélection > 0) -->
+      <button class="btn-tag-sel" id="btn-tag" onclick="tagSelected()" disabled title="Tagger via IA">
+        🏷 Tagger
       </button>
-      <button class="btn-tag-sel" id="btn-collect-sel" onclick="collectSelection()" disabled style="background:var(--surface);border-color:var(--accent3);color:var(--accent);margin-left:6px">
-        📥 Collecter la sélection
+      <button class="btn-tag-sel" id="btn-collect-sel" onclick="collectSelection()" disabled title="Collecter le dispositif via IA" style="background:var(--surface2);border-color:var(--border);color:var(--text)">
+        📥 Collecter
       </button>
     </div>
     <div class="tag-progress" id="tag-progress">
@@ -2640,7 +2660,7 @@ const NanoChart = (() => {
       <div class="tag-bar-header">
         <button class="tag-bar-toggle" id="tag-bar-toggle" onclick="toggleTagBar()" title="Afficher/Masquer les tags">▼</button>
         <span class="tag-bar-label">Tags</span>
-        <button class="tagged-only-btn" id="tagged-only-btn" onclick="toggleTaggedOnly()">⭐ Articles taggerés uniquement</button>
+        
       </div>
       <div class="tag-bar" id="tag-bar" style="display:none"><!-- filled by JS --></div>
     </div>
@@ -3900,7 +3920,15 @@ function toggleMenu(e, id) {
   const menu = document.getElementById('menu-' + id);
   const isOpen = menu.classList.contains('open');
   closeAllMenus();
-  if (!isOpen) menu.classList.add('open');
+  if (!isOpen) {
+    const btn = e.currentTarget || e.target;
+    const rect = btn.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 4) + 'px';
+    menu.style.right = (window.innerWidth - rect.right) + 'px';
+    menu.style.left = 'auto';
+    document.body.appendChild(menu);
+    menu.classList.add('open');
+  }
 }
 function closeAllMenus() { document.querySelectorAll('.card-menu.open').forEach(m => m.classList.remove('open')); }
 document.addEventListener('click', closeAllMenus);
@@ -4155,6 +4183,8 @@ function selectNone() {
 function updateSelUI() {
   const n = selectedIds.size;
   document.getElementById('sel-count').textContent = n;
+  const wrap = document.getElementById('sel-count-wrap');
+  if (wrap) wrap.style.display = n > 0 ? 'inline-flex' : 'none';
   document.getElementById('btn-tag').disabled = n === 0;
   const btnCS = document.getElementById('btn-collect-sel'); if (btnCS) btnCS.disabled = n === 0;
   const allSel = articles.length > 0 && n === articles.length;
@@ -4265,9 +4295,33 @@ let taggedOnly = false;
 function toggleTaggedOnly() {
   taggedOnly = !taggedOnly;
   const btn = document.getElementById('tagged-only-btn');
-  btn.classList.toggle('active', taggedOnly);
+  if (btn) btn.classList.toggle('active', taggedOnly);
+  const item = document.getElementById('drop-tagged');
+  const chk = document.getElementById('check-tagged');
+  if (item) item.classList.toggle('active', taggedOnly);
+  if (chk) chk.textContent = taggedOnly ? '●' : '○';
+  updateFilterDot();
   loadArticles();
 }
+function toggleFilterDrop() {
+  const dd = document.getElementById('filter-dropdown');
+  const btn = document.getElementById('btn-filter-drop');
+  const rect = btn.getBoundingClientRect();
+  dd.style.top = (rect.bottom + 4) + 'px';
+  dd.style.left = rect.left + 'px';
+  dd.classList.toggle('open');
+}
+function updateFilterDot() {
+  const hasFilter = taggedOnly || cdcFilterActive;
+  const btn = document.getElementById('btn-filter-drop');
+  if (btn) btn.classList.toggle('has-active', hasFilter);
+}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#filter-dropdown-wrap')) {
+    const dd = document.getElementById('filter-dropdown');
+    if (dd) dd.classList.remove('open');
+  }
+});
 
 // -- Veille 360- ---------------------------------------------------------------
 </script>
@@ -4752,12 +4806,11 @@ let cdcFilterActive = false;
 
 function toggleCDCFilter() {
   cdcFilterActive = !cdcFilterActive;
-  const btn = document.getElementById('btn-cdc-filter');
-  if (btn) {
-    btn.style.background    = cdcFilterActive ? 'var(--accent3)' : 'var(--surface)';
-    btn.style.color         = cdcFilterActive ? 'var(--bg)'      : 'var(--text2)';
-    btn.style.borderColor   = cdcFilterActive ? 'var(--accent3)' : 'var(--border)';
-  }
+  const item = document.getElementById('drop-cdc');
+  const chk = document.getElementById('check-cdc');
+  if (item) item.classList.toggle('active', cdcFilterActive);
+  if (chk) chk.textContent = cdcFilterActive ? '●' : '○';
+  updateFilterDot();
   loadArticles();
 }
 
@@ -5013,7 +5066,8 @@ async function _runCDCScan(ids, useAI) {
 async function doRefresh() {
   const btn = document.getElementById('btn-refresh');
   const spin = document.getElementById('spin');
-  btn.disabled = true; spin.classList.add('on');
+  if (btn) btn.disabled = true;
+  if (spin) { spin.style.display = 'inline'; spin.classList.add('on'); }
   setProgress(20);
   try {
     await fetch(`${API}/api/scrape`, { method: 'POST' });
@@ -5024,7 +5078,8 @@ async function doRefresh() {
     setProgress(100);
     setTimeout(() => setProgress(0), 800);
   } catch(e) { showToast('❌ Erreur serveur'); }
-  btn.disabled = false; spin.classList.remove('on');
+  if (btn) btn.disabled = false;
+  if (spin) { spin.classList.remove('on'); spin.style.display = 'none'; }
 }
 
 // -- Helpers -------------------------------------------------------------------
