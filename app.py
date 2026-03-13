@@ -3432,6 +3432,7 @@ const NanoChart = (() => {
   <button class="tab-btn" id="tab-database" onclick="switchTab('database')">Base de données</button>
   <button class="tab-btn" id="tab-360" onclick="switchTab('360')">Veille 360°</button>
   <button class="tab-btn" id="tab-pdf" onclick="switchTab('pdf')">📋 Cahiers des charges</button>
+  <a class="tab-btn" href="/consultant" target="_blank" style="margin-left:auto;background:var(--lime);color:var(--accent);font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px">👥 Espace consultants ↗</a>
 </div>
 
 <div class="app">
