@@ -983,6 +983,9 @@ body {
 .sidebar-clear:hover { background: #ffe0e0; color: #c44; }
 
 .filter-group { margin-bottom: 4px; }
+.filter-group.locked > .filter-group-header { opacity: .3; pointer-events: none; cursor: not-allowed; }
+.filter-group.locked > .filter-tags { display: none !important; }
+.filter-group.locked > .filter-logic-wrap { display: none !important; }
 .filter-group-header {
   display: flex; align-items: center; gap: 6px;
   padding: 8px 16px; cursor: pointer;
@@ -1428,7 +1431,9 @@ TAG_GROUPS.forEach(g => {
 // ── INIT ─────────────────────────────────────────────────────────────
 async function init() {
   buildSidebar();
-  await Promise.all([loadArticles(), loadDispositifs()]);
+  updateLockState();
+  await loadArticles();
+  loadDispositifs();
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────────────
@@ -1471,12 +1476,21 @@ function toggleTag(groupKey, tag, el) {
   const s = filterState[groupKey].active;
   if (s.has(tag)) { s.delete(tag); el.classList.remove('active'); }
   else { s.add(tag); el.classList.add('active'); }
-  // Update count badge
   const count = s.size;
   const badge = document.getElementById('fc-' + groupKey);
   badge.textContent = count;
   badge.classList.toggle('show', count > 0);
+  if (groupKey === 'ref') updateLockState();
   applyFilters();
+}
+
+function updateLockState() {
+  const refActive = filterState['ref'] && filterState['ref'].active.size > 0;
+  TAG_GROUPS.forEach(g => {
+    if (g.key === 'ref') return;
+    const el = document.getElementById('fg-' + g.key);
+    if (el) el.classList.toggle('locked', !refActive);
+  });
 }
 
 function clearAllFilters() {
@@ -1501,15 +1515,43 @@ async function loadArticles() {
 }
 
 async function loadDispositifs() {
-  try {
-    const res = await fetch(API + '/api/dispositifs');
-    allDispositifs = await res.json();
-    document.getElementById('st-dispositifs').textContent = allDispositifs.length;
-    renderDispositifs(allDispositifs);
-  } catch(e) {}
+  renderDispositivsFromArticles();
+}
+
+function renderDispositivsFromArticles() {
+  var DISP_TAG = '⭐ Dispositif';
+  var list = allArticles.filter(function(a) {
+    var t = Array.isArray(a.tags) ? a.tags : (JSON.parse(a.tags||'[]'));
+    return t.indexOf(DISP_TAG) >= 0;
+  });
+  document.getElementById('st-dispositifs').textContent = list.length;
+  var container = document.getElementById('disp-grid');
+  document.getElementById('disp-count').textContent = list.length + ' dispositif' + (list.length > 1 ? 's' : '');
+  if (!list.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128452;</div><div class="empty-state-title">Aucun dispositif tagé</div><p>Les articles tagés ⭐ Dispositif apparaissent ici</p></div>';
+    return;
+  }
+  container.innerHTML = list.map(function(a) {
+    var tags = Array.isArray(a.tags) ? a.tags : (JSON.parse(a.tags||'[]'));
+    var date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR', {day:'numeric',month:'short',year:'numeric'}) : '';
+    var otherTags = tags.filter(function(t){ return !t.startsWith('⭐'); });
+    var tagsHtml = otherTags.map(function(t){ return '<span class="article-tag">' + t + '</span>'; }).join('');
+    var cdcBadge = a.pdf_url ? '<span class="article-tag cdc">CDC</span>' : '';
+    var cdcBtn = a.pdf_url ? '<a class="disp-btn" href="' + a.pdf_url + '" target="_blank">↓ CDC</a>' : '';
+    return '<div class="disp-card">'
+      + '<div class="disp-card-header"><div class="disp-card-icon">&#128176;</div>'
+      + '<div><div class="disp-card-title">' + a.title + '</div>'
+      + '<div class="disp-card-financeur">' + (a.source||'') + ' · ' + date + '</div></div></div>'
+      + '<div class="disp-field" style="flex-wrap:wrap;flex-direction:row;gap:4px;margin-top:4px">' + tagsHtml + cdcBadge + '</div>'
+      + '<div class="disp-card-footer">'
+      + '<a class="disp-btn primary" href="' + a.url + '" target="_blank" rel="noopener">Consulter</a>'
+      + cdcBtn
+      + '</div></div>';
+  }).join('');
 }
 
 function updateStats() {
+  renderDispositivsFromArticles();
   document.getElementById('st-articles').textContent = allArticles.length;
   const today = new Date().toDateString();
   const todayCount = allArticles.filter(a => new Date(a.scraped_at).toDateString() === today).length;
@@ -1539,7 +1581,7 @@ function applyFilters() {
     if (!active.size) return;
     const logic = filterState[g.key].logic;
     filtered = filtered.filter(a => {
-      const tags = JSON.parse(a.tags || '[]');
+      const tags = Array.isArray(a.tags) ? a.tags : (JSON.parse(a.tags||'[]'));
       if (logic === 'OR') return [...active].some(t => tags.includes(t));
       else return [...active].every(t => tags.includes(t));
     });
@@ -1550,8 +1592,8 @@ function applyFilters() {
     filtered.sort((a,b) => new Date(b.scraped_at) - new Date(a.scraped_at));
   } else {
     filtered.sort((a,b) => {
-      const ad = (JSON.parse(a.tags||'[]')).includes('⭐ Dispositif');
-      const bd = (JSON.parse(b.tags||'[]')).includes('⭐ Dispositif');
+      const ad = (Array.isArray(a.tags)?a.tags:(JSON.parse(a.tags||'[]'))).includes('⭐ Dispositif');
+      const bd = (Array.isArray(b.tags)?b.tags:(JSON.parse(b.tags||'[]'))).includes('⭐ Dispositif');
       if (ad && !bd) return -1; if (!ad && bd) return 1;
       return new Date(b.scraped_at) - new Date(a.scraped_at);
     });
@@ -1569,7 +1611,7 @@ function renderArticles(list) {
     return;
   }
   container.innerHTML = list.map((a, i) => {
-    const tags = JSON.parse(a.tags || '[]');
+    const tags = Array.isArray(a.tags) ? a.tags : (JSON.parse(a.tags||'[]'));
     const isDisp = tags.includes('⭐ Dispositif');
     const date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR', {day:'numeric',month:'short'}) : '';
     const tagsHtml = tags.map(t => {
