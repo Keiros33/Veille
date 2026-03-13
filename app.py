@@ -1855,6 +1855,608 @@ function pollAutoTagStatus() {
 </body>
 </html>"""
 
+LANDING_PAGE = """<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubstanCiel — Plateforme de veille intelligente</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f4f3ef; --surface: #ffffff; --surface2: #f0efe9;
+  --border: #e2e0d8; --text: #1a1a18; --text2: #5a5a52; --muted: #9a9a90;
+  --accent: #1a3c2e; --lime: #c8e84e; --lime-soft: #e8f5b0;
+}
+html { scroll-behavior: smooth; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); }
+a { text-decoration: none; }
+
+/* ── NAV ── */
+.nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 52px; height: 62px;
+  background: rgba(244,243,239,.94); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+}
+.nav-logo {
+  font-family: 'Syne', sans-serif; font-weight: 800; font-size: 19px;
+  color: var(--accent); display: flex; align-items: center; gap: 9px;
+}
+.logo-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--lime);
+  box-shadow: 0 0 0 4px rgba(200,232,78,.25);
+  animation: sc-pulse 2.4s ease-in-out infinite;
+}
+@keyframes sc-pulse {
+  0%,100% { box-shadow: 0 0 0 4px rgba(200,232,78,.2); }
+  50%      { box-shadow: 0 0 0 8px rgba(200,232,78,.07); }
+}
+.nav-links { display: flex; align-items: center; gap: 28px; }
+.nav-links a { font-size: 13px; font-weight: 500; color: var(--text2); transition: color .15s; }
+.nav-links a:hover { color: var(--accent); }
+.nav-cta {
+  background: var(--accent) !important; color: var(--lime) !important;
+  padding: 7px 18px; border-radius: 100px; font-weight: 600 !important; font-size: 13px !important;
+  transition: transform .15s, box-shadow .15s;
+}
+.nav-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(26,60,46,.28); }
+
+/* ── HERO ── */
+.hero {
+  padding: 88px 52px 72px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  background: var(--bg); position: relative; overflow: hidden;
+}
+.hero-grid {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 72px 72px; opacity: .45;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, black, transparent);
+  -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, black, transparent);
+}
+.hero-blob {
+  position: absolute; border-radius: 50%;
+  background: var(--lime); opacity: .08; pointer-events: none;
+}
+.eyebrow {
+  position: relative;
+  font-size: 11px; font-weight: 600; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--accent); background: var(--lime-soft);
+  border: 1px solid rgba(200,232,78,.5); padding: 5px 16px; border-radius: 100px;
+  margin-bottom: 26px; display: inline-block;
+}
+.hero-title {
+  position: relative;
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: clamp(38px, 5.5vw, 68px); line-height: 1.06; letter-spacing: -.03em;
+  color: var(--accent); max-width: 840px; margin-bottom: 22px;
+}
+.hl { display: inline-block; position: relative; }
+.hl::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 4px;
+  height: 7px; background: var(--lime); z-index: -1; border-radius: 3px; opacity: .65;
+}
+.hero-sub {
+  position: relative; font-size: 17px; color: var(--text2);
+  line-height: 1.65; max-width: 520px; margin-bottom: 40px; font-weight: 300;
+}
+.hero-btns {
+  position: relative;
+  display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 56px;
+}
+.btn-p {
+  background: var(--accent); color: var(--lime); padding: 13px 28px; border-radius: 100px;
+  font-weight: 600; font-size: 14px; border: none; font-family: 'DM Sans', sans-serif;
+  display: inline-flex; align-items: center; gap: 7px;
+  transition: transform .15s, box-shadow .15s; cursor: pointer;
+}
+.btn-p:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(26,60,46,.28); }
+.btn-s {
+  background: var(--surface); color: var(--accent); padding: 13px 24px; border-radius: 100px;
+  font-weight: 500; font-size: 14px; border: 1.5px solid var(--border);
+  font-family: 'DM Sans', sans-serif;
+  display: inline-flex; align-items: center; gap: 7px; transition: border-color .15s, background .15s;
+}
+.btn-s:hover { border-color: var(--accent); background: var(--lime-soft); }
+
+/* STATS */
+.stats {
+  position: relative;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  max-width: 760px; width: 100%; overflow: hidden;
+}
+.stat { padding: 22px 28px; text-align: center; border-right: 1px solid var(--border); }
+.stat:last-child { border-right: none; }
+.stat-n { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 32px; color: var(--accent); line-height: 1; }
+.stat-n em { color: var(--lime); font-style: normal; }
+.stat-l { font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+/* ── SECTION ESPACES ── */
+.section { padding: 80px 52px; background: var(--bg); }
+.sec-head { text-align: center; margin-bottom: 52px; }
+.sec-eye {
+  font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 10px;
+}
+.sec-title {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: clamp(24px, 3vw, 40px); color: var(--accent);
+  letter-spacing: -.02em; margin-bottom: 12px; line-height: 1.1;
+}
+.sec-sub { font-size: 15px; color: var(--text2); max-width: 480px; margin: 0 auto; line-height: 1.65; }
+
+/* GRILLE 3 CARTES */
+.cards-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 20px; max-width: 1100px; margin: 0 auto;
+}
+
+/* CARTE ESPACE */
+.ecard {
+  border-radius: 22px; display: flex; flex-direction: column;
+  transition: transform .22s, box-shadow .22s; overflow: hidden;
+}
+.ecard:hover { transform: translateY(-5px); box-shadow: 0 22px 50px rgba(26,60,46,.13); }
+.ecard-dark  { background: var(--accent); }
+.ecard-white { background: var(--surface); border: 1.5px solid var(--border); }
+.ecard-gray  { background: var(--surface2); border: 1.5px dashed var(--border); opacity: .76; }
+
+.ecard-inner { padding: 32px 28px 28px; flex: 1; display: flex; flex-direction: column; }
+
+.etag {
+  font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  margin-bottom: 22px; display: flex; align-items: center; gap: 8px;
+}
+.ecard-dark  .etag { color: rgba(200,232,78,.4); }
+.ecard-white .etag { color: var(--muted); }
+.ecard-gray  .etag { color: var(--muted); }
+
+.ebadge { font-size: 9px; padding: 2px 8px; border-radius: 100px; font-weight: 700; }
+.ebadge-live  { background: rgba(200,232,78,.2);  color: var(--lime); }
+.ebadge-liveg { background: rgba(200,232,78,.18); color: #3a6020; }
+.ebadge-wip   { background: var(--border);        color: var(--muted); }
+
+.eicon {
+  width: 48px; height: 48px; border-radius: 13px;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 18px;
+}
+.ecard-dark  .eicon { background: rgba(200,232,78,.12); }
+.ecard-white .eicon { background: var(--lime-soft); }
+.ecard-gray  .eicon { background: var(--border); }
+
+.ename {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 22px; line-height: 1.1; margin-bottom: 9px;
+}
+.ecard-dark  .ename { color: var(--lime); }
+.ecard-white .ename { color: var(--accent); }
+.ecard-gray  .ename { color: var(--text2); }
+
+.edesc { font-size: 13.5px; line-height: 1.6; margin-bottom: 22px; }
+.ecard-dark  .edesc { color: rgba(244,243,239,.58); }
+.ecard-white .edesc { color: var(--text2); }
+.ecard-gray  .edesc { color: var(--muted); }
+
+.efeats { list-style: none; flex: 1; display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; }
+.efeats li { font-size: 13px; display: flex; align-items: flex-start; gap: 9px; line-height: 1.45; }
+.ecard-dark  .efeats li { color: rgba(244,243,239,.73); }
+.ecard-white .efeats li { color: var(--text2); }
+.ecard-gray  .efeats li { color: var(--muted); }
+.fdot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+.ecard-dark  .fdot { background: var(--lime); }
+.ecard-white .fdot { background: var(--accent); }
+.ecard-gray  .fdot { background: var(--border); }
+
+.eurl {
+  font-size: 10px; font-weight: 500; letter-spacing: .04em;
+  margin-bottom: 10px; display: block;
+}
+.ecard-dark  .eurl { color: rgba(200,232,78,.28); }
+.ecard-white .eurl { color: var(--muted); }
+.ecard-gray  .eurl { color: var(--border); }
+
+.ebtn {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-weight: 600; font-size: 13px; padding: 11px 22px; border-radius: 100px;
+  cursor: pointer; border: none; font-family: 'DM Sans', sans-serif; transition: all .15s;
+}
+.ecard-dark  .ebtn { background: var(--lime); color: var(--accent); }
+.ecard-dark  .ebtn:hover { background: #d8f060; transform: translateX(2px); }
+.ecard-white .ebtn { background: var(--accent); color: var(--lime); }
+.ecard-white .ebtn:hover { box-shadow: 0 6px 18px rgba(26,60,46,.22); transform: translateX(2px); }
+.ecard-gray  .ebtn { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+/* ── PIPELINE ── */
+.pipe-wrap { padding: 0 52px 80px; }
+.pipeline {
+  background: var(--accent); border-radius: 26px;
+  padding: 60px 52px; position: relative; overflow: hidden;
+}
+.pipe-blob { position: absolute; border-radius: 50%; background: var(--lime); opacity: .05; pointer-events: none; }
+.pipe-eye { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: rgba(200,232,78,.4); margin-bottom: 8px; }
+.pipe-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(22px, 2.8vw, 34px); color: var(--lime); letter-spacing: -.02em; line-height: 1.1; margin-bottom: 10px; }
+.pipe-sub { font-size: 14px; color: rgba(244,243,239,.48); max-width: 460px; line-height: 1.6; margin-bottom: 44px; }
+.pipe-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; position: relative; }
+.pipe-step {
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.09);
+  border-radius: 14px; padding: 22px 18px; position: relative; transition: background .18s;
+}
+.pipe-step:hover { background: rgba(255,255,255,.09); }
+.pipe-num { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 28px; color: rgba(200,232,78,.14); line-height: 1; margin-bottom: 12px; }
+.pipe-t { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; color: var(--lime); margin-bottom: 7px; }
+.pipe-d { font-size: 12px; color: rgba(244,243,239,.5); line-height: 1.55; }
+.pipe-arr {
+  position: absolute; right: -14px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px; background: var(--accent);
+  border: 1px solid rgba(200,232,78,.18); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; z-index: 2;
+}
+.pipe-step:last-child .pipe-arr { display: none; }
+
+/* ── AGENT ── */
+.agent { padding: 80px 52px; }
+.agent-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; align-items: center; max-width: 1100px; margin: 0 auto; }
+.agent-pts { display: flex; flex-direction: column; gap: 20px; margin-top: 24px; }
+.apt { display: flex; gap: 13px; align-items: flex-start; }
+.apt-ico { width: 32px; height: 32px; border-radius: 10px; background: var(--lime-soft); flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+.apt-t { font-weight: 600; font-size: 14px; color: var(--accent); margin-bottom: 3px; }
+.apt-d { font-size: 13px; color: var(--text2); line-height: 1.5; }
+
+.terminal { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 22px; }
+.tbar { display: flex; align-items: center; gap: 6px; margin-bottom: 18px; }
+.tdot { width: 10px; height: 10px; border-radius: 50%; }
+.tlbl { font-size: 11px; color: var(--muted); margin-left: 8px; font-weight: 500; }
+.tlog { display: flex; flex-direction: column; gap: 7px; min-height: 130px; }
+.tline { display: flex; gap: 9px; align-items: flex-start; }
+.ttag { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 4px; flex-shrink: 0; margin-top: 2px; letter-spacing: .04em; }
+.tok  { background: #e8f5e8; color: #2a7a2a; }
+.tdisp{ background: var(--lime-soft); color: var(--accent); }
+.tact { background: #e8eeff; color: #2a4bb0; }
+.tdel { background: #fde8e8; color: #b02a2a; }
+.ttxt { font-size: 12px; color: var(--text2); line-height: 1.4; }
+.tprog { background: var(--surface2); border-radius: 5px; height: 5px; margin-top: 16px; overflow: hidden; }
+.tpbar { height: 100%; background: var(--lime); border-radius: 5px; transition: width 1s ease; width: 0%; }
+.tmeta { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+/* ── FOOTER ── */
+footer {
+  background: var(--accent); padding: 48px 52px;
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;
+}
+.flogo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; color: var(--lime); }
+.ftag  { font-size: 12px; color: rgba(200,232,78,.38); margin-top: 4px; }
+.flinks { display: flex; gap: 26px; }
+.flinks a { font-size: 13px; color: rgba(244,243,239,.42); transition: color .15s; }
+.flinks a:hover { color: var(--lime); }
+</style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav class="nav">
+  <div class="nav-logo">
+    <div class="logo-dot"></div>
+    SubstanCiel
+  </div>
+  <div class="nav-links">
+    <a href="#espaces">Les espaces</a>
+    <a href="#pipeline">Pipeline</a>
+    <a href="#agent">Agent IA</a>
+    <a href="/app" class="nav-cta">Espace Curation &rarr;</a>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<div class="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-blob" style="width:580px;height:580px;top:-150px;right:-90px;"></div>
+  <div class="hero-blob" style="width:260px;height:260px;bottom:30px;left:-50px;"></div>
+
+  <div class="eyebrow">Plateforme de veille intelligente</div>
+  <h1 class="hero-title">
+    La veille strat&eacute;gique<br>
+    <span class="hl">automatis&eacute;e</span> pour les<br>
+    experts du financement
+  </h1>
+  <p class="hero-sub">
+    Scraping intelligent sur 91 sources, qualification IA et collecte structur&eacute;e en 19 champs.
+    Ne manquez plus aucun dispositif de financement public.
+  </p>
+  <div class="hero-btns">
+    <a href="/app" class="btn-p">
+      Espace Curation
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1.5 6.5h10M8 3l4 3.5-4 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+    <a href="/consultant" class="btn-s">
+      Espace Collecte
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1.5 6.5h10M8 3l4 3.5-4 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+  </div>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-n">91<em>+</em></div>
+      <div class="stat-l">Sources surveill&eacute;es</div>
+    </div>
+    <div class="stat">
+      <div class="stat-n">6<em>h</em></div>
+      <div class="stat-l">Cycle de scraping auto</div>
+    </div>
+    <div class="stat">
+      <div class="stat-n">19</div>
+      <div class="stat-l">Champs par dispositif</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ESPACES ── -->
+<div id="espaces" class="section">
+  <div class="sec-head">
+    <div class="sec-eye">Les 3 espaces</div>
+    <h2 class="sec-title">Un outil, trois niveaux d'usage</h2>
+    <p class="sec-sub">De la captation brute &agrave; la gestion de projet client, chaque espace r&eacute;pond &agrave; un besoin m&eacute;tier distinct.</p>
+  </div>
+
+  <div class="cards-grid">
+
+    <!-- 01 CURATION -->
+    <div class="ecard ecard-dark">
+      <div class="ecard-inner">
+        <div class="etag">
+          <span>01</span>
+          <span class="ebadge ebadge-live">&#9679; Actif</span>
+        </div>
+        <div class="eicon">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M11 2l2.5 6H20l-5.5 4 2 6L11 14l-5.5 4 2-6L2 8h6.5L11 2z" stroke="rgba(200,232,78,.75)" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="ename">Espace Curation</div>
+        <p class="edesc">Le back-office du veilleur. Supervision du flux complet, qualification et alimentation de la base consultants.</p>
+        <ul class="efeats">
+          <li><span class="fdot"></span>Scraping automatique toutes les 6h sur 91 sources</li>
+          <li><span class="fdot"></span>Agent IA&nbsp;: tagging automatique + suppression du bruit</li>
+          <li><span class="fdot"></span>D&eacute;tection CDC au scraping (PDF, Word&hellip;)</li>
+          <li><span class="fdot"></span>Dashboard stats, Veille 360&deg;, export PowerPoint</li>
+          <li><span class="fdot"></span>Gestion des sources par dossier / r&eacute;pertoire</li>
+        </ul>
+        <span class="eurl">veille-q32f.onrender.com/app</span>
+        <a href="/app" class="ebtn">
+          Ouvrir la curation
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1 5.5h9M6.5 2l3 3.5-3 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 02 COLLECTE -->
+    <div class="ecard ecard-white">
+      <div class="ecard-inner">
+        <div class="etag">
+          <span>02</span>
+          <span class="ebadge ebadge-liveg">&#9679; Actif</span>
+        </div>
+        <div class="eicon">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M14 2H8a2 2 0 00-2 2v14a2 2 0 002 2h8a2 2 0 002-2V8l-4-6z" stroke="#1a3c2e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 2v6h6M8 13h6M8 17h4" stroke="#1a3c2e" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="ename">Espace Collecte</div>
+        <p class="edesc">L'interface consultants en lecture seule. Acc&egrave;s &agrave; toute la veille qualifi&eacute;e, collecte directe des dispositifs en base partagée.</p>
+        <ul class="efeats">
+          <li><span class="fdot"></span>Vue s&eacute;par&eacute;e&nbsp;: &#11088; Dispositifs / &#128240; Actualit&eacute;s</li>
+          <li><span class="fdot"></span>Filtres&nbsp;: type, b&eacute;n&eacute;ficiaire, territoire, m&eacute;canisme</li>
+          <li><span class="fdot"></span>Bouton &laquo;&nbsp;Collecter&nbsp;&raquo; &rarr; Claude analyse le CDC en priorit&eacute;</li>
+          <li><span class="fdot"></span>Base dispositifs partag&eacute;e, doublon impossible</li>
+          <li><span class="fdot"></span>Acc&egrave;s multi-consultant simultan&eacute;, lecture seule</li>
+        </ul>
+        <span class="eurl">veille-q32f.onrender.com/consultant</span>
+        <a href="/consultant" class="ebtn">
+          Ouvrir la collecte
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1 5.5h9M6.5 2l3 3.5-3 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- 03 PROJET -->
+    <div class="ecard ecard-gray">
+      <div class="ecard-inner">
+        <div class="etag">
+          <span>03</span>
+          <span class="ebadge ebadge-wip">En d&eacute;veloppement</span>
+        </div>
+        <div class="eicon">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <rect x="3" y="3" width="16" height="12" rx="2" stroke="#9a9a90" stroke-width="1.6"/>
+            <path d="M7 19h8M11 15v4M7 8h2M11 8h4M7 11h8" stroke="#9a9a90" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="ename">Espace Projet</div>
+        <p class="edesc">L'espace d&eacute;di&eacute; &agrave; chaque consultant. Suivi de dossiers clients, matching IA et propositions cibl&eacute;es.</p>
+        <ul class="efeats">
+          <li><span class="fdot"></span>Espace individuel s&eacute;curis&eacute; par consultant (login)</li>
+          <li><span class="fdot"></span>Portefeuille clients et dossiers actifs</li>
+          <li><span class="fdot"></span>Matching dispositifs &times; profil porteur (IA)</li>
+          <li><span class="fdot"></span>Analyse liasses fiscales &rarr; &eacute;ligibilit&eacute; automatique</li>
+          <li><span class="fdot"></span>CRM int&eacute;gr&eacute; &amp; prospection sortante</li>
+        </ul>
+        <span class="eurl">Disponible prochainement</span>
+        <button class="ebtn" disabled>Bient&ocirc;t disponible</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── PIPELINE ── -->
+<div id="pipeline" class="pipe-wrap">
+  <div class="pipeline">
+    <div class="pipe-blob" style="width:420px;height:420px;top:-160px;right:-60px;"></div>
+    <div class="pipe-eye">Pipeline automatis&eacute;</div>
+    <div class="pipe-title">De la source brute &agrave; la fiche structur&eacute;e</div>
+    <div class="pipe-sub">Chaque article suit un pipeline en 4 &eacute;tapes avant d'&ecirc;tre disponible pour les consultants.</div>
+    <div class="pipe-steps">
+      <div class="pipe-step">
+        <div class="pipe-num">01</div>
+        <div class="pipe-t">Scraping</div>
+        <div class="pipe-d">91 sources surveill&eacute;es. Nouveaux articles et CDC d&eacute;tect&eacute;s &agrave; chaque cycle de 6h.</div>
+        <div class="pipe-arr">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1 4.5h7M5 2l3 2.5L5 7" stroke="rgba(200,232,78,.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-num">02</div>
+        <div class="pipe-t">Curation IA</div>
+        <div class="pipe-d">Agent Claude Haiku&nbsp;: tag Dispositif / Actualit&eacute;, sous-tags QUI/O&Ugrave;/COMMENT, suppression du bruit.</div>
+        <div class="pipe-arr">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1 4.5h7M5 2l3 2.5L5 7" stroke="rgba(200,232,78,.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-num">03</div>
+        <div class="pipe-t">Collecte</div>
+        <div class="pipe-d">1&nbsp;clic consultant. Claude analyse le CDC PDF en priorit&eacute; &rarr; fiche structur&eacute;e en 19 champs.</div>
+        <div class="pipe-arr">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1 4.5h7M5 2l3 2.5L5 7" stroke="rgba(200,232,78,.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+      <div class="pipe-step">
+        <div class="pipe-num">04</div>
+        <div class="pipe-t">Base partag&eacute;e</div>
+        <div class="pipe-d">Fiche disponible pour toute l'&eacute;quipe. Export PPTX en 1&nbsp;clic, doublon impossible.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── AGENT IA ── -->
+<div id="agent" class="agent">
+  <div class="agent-inner">
+    <div>
+      <div class="sec-eye">Agent IA</div>
+      <h2 class="sec-title">Curation automatique,<br>z&eacute;ro bruit</h2>
+      <p class="sec-sub">Lancez l'agent depuis l'espace curation. Il analyse chaque article, attribue les bons tags et &eacute;limine ce qui ne m&eacute;rite pas attention.</p>
+      <div class="agent-pts">
+        <div class="apt">
+          <div class="apt-ico">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h4l2-4 3 8 2-4h3" stroke="#1a3c2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div>
+            <div class="apt-t">Tagging contextuel</div>
+            <div class="apt-d">Type, b&eacute;n&eacute;ficiaires, territoire, m&eacute;canisme &mdash; jusqu'&agrave; 8 tags par article.</div>
+          </div>
+        </div>
+        <div class="apt">
+          <div class="apt-ico">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 4L6 12l-3-3" stroke="#1a3c2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div>
+            <div class="apt-t">Suppression du bruit</div>
+            <div class="apt-d">Articles hors-sujet supprim&eacute;s automatiquement, avec confirmation avant ex&eacute;cution.</div>
+          </div>
+        </div>
+        <div class="apt">
+          <div class="apt-ico">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="#1a3c2e" stroke-width="1.5"/><path d="M8 5.5v3l2 1.5" stroke="#1a3c2e" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div class="apt-t">Configurable</div>
+            <div class="apt-d">Articles non tag&uacute;s uniquement, ou tout le flux. De 5 &agrave; 200 articles par session.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="terminal">
+      <div class="tbar">
+        <div class="tdot" style="background:#ff5f57"></div>
+        <div class="tdot" style="background:#febc2e"></div>
+        <div class="tdot" style="background:#28c840"></div>
+        <span class="tlbl">Agent Curation IA &mdash; session active</span>
+      </div>
+      <div class="tlog" id="sc-log"></div>
+      <div class="tprog"><div class="tpbar" id="sc-bar"></div></div>
+      <div class="tmeta">
+        <span id="sc-status">En attente&hellip;</span>
+        <span id="sc-pct">0%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div>
+    <div class="flogo">SubstanCiel</div>
+    <div class="ftag">Plateforme de veille intelligente &mdash; financement public</div>
+  </div>
+  <div class="flinks">
+    <a href="/app">Espace Curation</a>
+    <a href="/consultant">Espace Collecte</a>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var logs = [
+    { t: 'ok',   l: 'Chargement de 47 articles non tag\u00e9s\u2026' },
+    { t: 'disp', l: 'AAP ADEME Fonds Chaleur 2025 \u2192 \u2b50 Dispositif \u00b7 \u00c9nergie \u00b7 AAP \u00b7 National' },
+    { t: 'act',  l: 'France 2030 bilan mi-parcours \u2192 \u2b50 Actualit\u00e9 \u00b7 Innovation \u00b7 National' },
+    { t: 'del',  l: 'Supprim\u00e9 \u2014 hors sujet (presse g\u00e9n\u00e9raliste)' },
+    { t: 'disp', l: 'AMI Bpifrance Industrie verte \u2192 \u2b50 Dispositif \u00b7 Industrie \u00b7 AMI' },
+    { t: 'act',  l: 'PLF 2026 cr\u00e9dit imp\u00f4t recherche \u2192 \u2b50 Actualit\u00e9 \u00b7 R\u00e9forme' },
+    { t: 'disp', l: 'FEADER Occitanie 2025 \u2192 \u2b50 Dispositif \u00b7 Agriculture \u00b7 FEADER' },
+    { t: 'del',  l: 'Supprim\u00e9 \u2014 contenu dupliqu\u00e9 d\u00e9tect\u00e9' },
+    { t: 'ok',   l: '\u2713 47 trait\u00e9s \u2014 32 tag\u00e9s \u00b7 8 supprim\u00e9s \u00b7 0 erreur' }
+  ];
+  var cm = { ok: 'tok', disp: 'tdisp', act: 'tact', del: 'tdel' };
+  var lm = { ok: 'OK', disp: 'DISP', act: 'ACT', del: 'DEL' };
+  var logEl = document.getElementById('sc-log');
+  var bar   = document.getElementById('sc-bar');
+  var st    = document.getElementById('sc-status');
+  var pct   = document.getElementById('sc-pct');
+  var s = 0;
+
+  function next() {
+    if (s >= logs.length) {
+      bar.style.width = '100%';
+      st.textContent  = '\u2713 Termin\u00e9';
+      pct.textContent = '100%';
+      setTimeout(function () {
+        s = 0; logEl.innerHTML = '';
+        bar.style.transition = 'none'; bar.style.width = '0%';
+        st.textContent = 'En attente\u2026'; pct.textContent = '0%';
+        setTimeout(function () { bar.style.transition = 'width 1s ease'; }, 50);
+        setTimeout(next, 1400);
+      }, 3200);
+      return;
+    }
+    var l   = logs[s];
+    var div = document.createElement('div');
+    div.className = 'tline';
+    div.innerHTML = '<span class="ttag ' + cm[l.t] + '">' + lm[l.t] + '</span>'
+                  + '<span class="ttxt">' + l.l + '</span>';
+    logEl.appendChild(div);
+    while (logEl.children.length > 5) logEl.removeChild(logEl.children[0]);
+    var p = Math.round((s + 1) / logs.length * 100);
+    bar.style.width = p + '%';
+    st.textContent  = (s + 1) + '/' + logs.length + ' articles';
+    pct.textContent = p + '%';
+    s++;
+    setTimeout(next, s === logs.length ? 500 : 900 + Math.random() * 500);
+  }
+  setTimeout(next, 800);
+})();
+</script>
+</body>
+</html>
+"""
+
+
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -3567,7 +4169,7 @@ const NanoChart = (() => {
   <button class="tab-btn" id="tab-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
   <button class="tab-btn" id="tab-360" onclick="switchTab('360')">Veille 360°</button>
   <button class="tab-btn" id="tab-pdf" onclick="switchTab('pdf')">📋 Cahiers des charges</button>
-  <a class="tab-btn" href="/consultant" target="_blank" style="margin-left:auto;background:var(--lime);color:var(--accent);font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px">👥 Espace consultants ↗</a>
+  <a class="tab-btn" href="/consultant" style="margin-left:auto;background:var(--lime);color:var(--accent);font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px">👥 Espace consultants ↗</a>
 </div>
 
 <div class="app">
@@ -6253,6 +6855,10 @@ def consultant():
 
 @app.route('/')
 def index():
+    return LANDING_PAGE, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+@app.route('/app')
+def app_page():
     return HTML_PAGE, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 @app.route('/api/ping')
