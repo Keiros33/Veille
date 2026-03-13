@@ -1615,7 +1615,7 @@ function renderArticles(list) {
     html += renderArticleCards(disps, true);
   }
   if (acts.length) {
-    html += '<div class="section-label">������ Actualités <span class="section-count">'+acts.length+'</span></div>';
+    html += '<div class="section-label">📰 Actualités <span class="section-count">'+acts.length+'</span></div>';
     html += renderArticleCards(acts, false);
   }
   container.innerHTML = html;
@@ -1629,12 +1629,12 @@ function renderArticleCards(list, showCollect) {
     const subTags = tags.filter(t => !t.startsWith('⭐'));
     const typeBadge = isDisp ? '<span class="article-tag ref">⭐ Dispositif</span>' : '<span class="article-tag">⭐ Actualité</span>';
     const tagsHtml = subTags.map(t=>'<span class="article-tag">'+t+'</span>').join('');
-    const cdcInfo = a.pdf_url ? `<a class="cdc-inline-link" href="${a.pdf_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">������ CDC</a>` : '';
+    const cdcInfo = a.pdf_url ? `<a class="cdc-inline-link" href="${a.pdf_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📋 CDC</a>` : '';
     const safeUrl = (a.url||'').replace(/"/g,'&quot;');
     const safeTitle = (a.title||'').replace(/"/g,'&quot;');
     const safePdf = (a.pdf_url||'').replace(/"/g,'&quot;');
     const collectBtn = showCollect
-      ? `<button class="btn-collect" data-url="${safeUrl}" data-title="${safeTitle}" data-id="${a.id||0}" data-pdf="${safePdf}" onclick="collectFromVeille(event)"><span class="collect-icon">������</span> Collecter</button>`
+      ? `<button class="btn-collect" data-url="${safeUrl}" data-title="${safeTitle}" data-id="${a.id||0}" data-pdf="${safePdf}" onclick="collectFromVeille(event)"><span class="collect-icon">💾</span> Collecter</button>`
       : '';
     return `<a class="article-card${isDisp?' is-dispositif':''}" href="${a.url}" target="_blank" rel="noopener" style="animation-delay:${Math.min(i*0.03,0.4)}s">
       <div class="article-card-top">
