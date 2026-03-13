@@ -392,10 +392,16 @@ def scrape_source(source):
             h = hashlib.md5(f"{item['url']}:{item['title']}".encode()).hexdigest()
             summary = extract_clean_summary(item.get('context',''))
             try:
-                cur.execute("""INSERT INTO articles (hash,title,url,summary,tags,source,cat,region,color,source_url)
-                    VALUES (%s,%s,%s,%s,'[]',%s,%s,%s,%s,%s) ON CONFLICT (hash) DO NOTHING""",
+                # Tenter de récupérer le CDC au moment du scrape
+                cdc_url = None
+                try:
+                    cdc_url = _scrape_pdf_url(item['url'])
+                except Exception:
+                    pass
+                cur.execute("""INSERT INTO articles (hash,title,url,summary,tags,source,cat,region,color,source_url,pdf_url)
+                    VALUES (%s,%s,%s,%s,'[]',%s,%s,%s,%s,%s,%s) ON CONFLICT (hash) DO NOTHING""",
                     (h,item['title'],item['url'],summary,source['name'],source['cat'],
-                     source.get('region',''),CAT_COLORS.get(source['cat'],'#4b5a75'),source['url']))
+                     source.get('region',''),CAT_COLORS.get(source['cat'],'#4b5a75'),source['url'],cdc_url))
                 if cur.rowcount > 0:
                     new_count += 1
             except Exception as e:
@@ -986,14 +992,16 @@ body {
 .filter-group.locked > .filter-group-header { opacity: .3; pointer-events: none; cursor: not-allowed; }
 .filter-group.locked > .filter-tags { display: none !important; }
 .filter-group.locked > .filter-logic-wrap { display: none !important; }
-.section-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); padding: 14px 0 6px; display: flex; align-items: center; gap: 8px; }
+.filter-group.locked > .section-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); padding: 14px 0 6px; display: flex; align-items: center; gap: 8px; }
 .section-count { background: var(--lime); color: var(--accent); border-radius: 100px; padding: 1px 8px; font-size: 10px; font-weight: 800; }
 .card-collect-row { padding: 8px 0 0; }
-.btn-collect { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; border: 1.5px solid var(--accent); background: var(--surface); color: var(--accent); font-family: 'DM Sans', sans-serif; transition: all .15s; white-space: nowrap; }
+.btn-collect { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; border: 1.5px solid var(--accent); background: var(--surface); color: var(--accent); font-family: 'DM Sans', sans-serif; transition: all .15s; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
 .btn-collect:hover:not(:disabled) { background: var(--accent); color: var(--lime); }
 .btn-collect:disabled { opacity: .55; cursor: default; }
-.disp-btn.cdc { border-color: #1a6bb5; color: #1a6bb5; }
-.disp-btn.cdc:hover { background: #1a6bb5; color: #fff; }
+.collect-icon { font-size: 12px; }
+.cdc-inline-link { font-size: 10px; font-weight: 700; color: #1a6bb5; text-decoration: none; background: #e8f3ff; border-radius: 4px; padding: 1px 6px; margin-left: 4px; }
+.cdc-inline-link:hover { background: #1a6bb5; color: #fff; }
+.cdc-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .filter-group-header {
   display: flex; align-items: center; gap: 6px;
   padding: 8px 16px; cursor: pointer;
@@ -1034,22 +1042,6 @@ body {
   background: var(--accent); color: var(--lime);
   border-color: var(--accent);
 }
-
-/* Logic toggle */
-.filter-logic-wrap {
-  display: none; align-items: center; gap: 6px;
-  padding: 0 16px 8px;
-  font-size: 10px; color: var(--muted);
-}
-.filter-group.open .filter-logic-wrap { display: flex; }
-.logic-btn {
-  padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;
-  cursor: pointer; border: 1px solid var(--border);
-  background: var(--surface2); color: var(--muted);
-  font-family: 'DM Sans', sans-serif; transition: all 0.12s;
-  letter-spacing: 0.05em;
-}
-.logic-btn.active { background: var(--accent); color: var(--lime); border-color: var(--accent); }
 
 /* ── MAIN CONTENT ─────────────────────────────────────────────────── */
 .main {
@@ -1444,25 +1436,37 @@ function collectFromVeille(e) {
   var url = btn.getAttribute('data-url');
   var title = btn.getAttribute('data-title');
   var artId = btn.getAttribute('data-id');
+  var pdfUrl = btn.getAttribute('data-pdf') || '';
   btn.disabled = true;
-  btn.textContent = '⏳ Collecte…';
+  btn.innerHTML = '<span class="collect-icon">⏳</span> Collecte…';
   fetch(API + '/api/collect', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({url: url, title: title, id: artId})
+    body: JSON.stringify({url:url, title:title, id:artId, pdf_url:pdfUrl})
   }).then(function(r){ return r.json(); }).then(function(d) {
-    if (d.status === 'duplicate') {
-      btn.textContent = '✓ Déjà collecté';
-      btn.style.cssText = 'background:#e8f5b0;color:#3a6020;border-color:#3a6020';
+    if (d.status==='duplicate') {
+      btn.innerHTML = '✓ Déjà collecté';
+      btn.style.cssText='background:#e8f5b0;color:#3a6020;border-color:#3a6020';
     } else if (d.error) {
-      btn.textContent = '⚠ Erreur'; btn.disabled = false;
+      btn.innerHTML = '⚠ Erreur'; btn.disabled=false;
     } else {
-      btn.textContent = '✅ Collecté !';
-      btn.style.cssText = 'background:var(--lime);color:var(--accent)';
-      loadDispositifs();
-      showToast('Dispositif ajouté à la base !');
+      // Sauvegarder dans la base
+      return fetch(API+'/api/dispositifs',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(d)
+      }).then(function(r2){ return r2.json(); }).then(function(d2){
+        if (d2.status==='duplicate') {
+          btn.innerHTML = '✓ Déjà collecté';
+          btn.style.cssText='background:#e8f5b0;color:#3a6020;border-color:#3a6020';
+        } else {
+          btn.innerHTML = '✅ Collecté !';
+          btn.style.cssText='background:var(--lime);color:var(--accent)';
+          loadDispositifs();
+          showToast('Dispositif ajouté à la base !');
+        }
+      });
     }
-  }).catch(function(){ btn.textContent = '⚠ Erreur réseau'; btn.disabled = false; });
+  }).catch(function(){ btn.innerHTML='⚠ Erreur réseau'; btn.disabled=false; });
 }
 async function init() {
   buildSidebar();
@@ -1480,11 +1484,6 @@ function buildSidebar() {
         <span class="filter-group-count" id="fc-${g.key}">0</span>
         <span class="filter-group-arrow">›</span>
       </div>
-      <div class="filter-logic-wrap">
-        <span style="font-size:10px;color:var(--muted)">Logique :</span>
-        <button class="logic-btn active" id="logic-or-${g.key}" onclick="setLogic('${g.key}','OR',event)">OU</button>
-        <button class="logic-btn" id="logic-and-${g.key}" onclick="setLogic('${g.key}','AND',event)">ET</button>
-      </div>
       <div class="filter-tags" id="ft-${g.key}">
         ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag('${g.key}','${t.replace(/'/g,"\\'")}',this)">${t}</span>`).join('')}
       </div>
@@ -1498,13 +1497,6 @@ function toggleGroup(key) {
   document.getElementById('fg-' + key).classList.toggle('open');
 }
 
-function setLogic(key, logic, e) {
-  e.stopPropagation();
-  filterState[key].logic = logic;
-  document.getElementById('logic-or-' + key).classList.toggle('active', logic === 'OR');
-  document.getElementById('logic-and-' + key).classList.toggle('active', logic === 'AND');
-  applyFilters();
-}
 
 function toggleTag(groupKey, tag, el) {
   const s = filterState[groupKey].active;
@@ -1585,11 +1577,9 @@ function applyFilters() {
   TAG_GROUPS.forEach(g => {
     const active = filterState[g.key].active;
     if (!active.size) return;
-    const logic = filterState[g.key].logic;
     filtered = filtered.filter(a => {
       const tags = Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]');
-      if (logic === 'OR') return [...active].some(t => tags.includes(t));
-      else return [...active].every(t => tags.includes(t));
+      return [...active].some(t => tags.includes(t));
     });
   });
 
@@ -1616,7 +1606,7 @@ function renderArticles(list) {
   const acts  = list.filter(a => { const t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.indexOf(ACT)>=0; });
   const container = document.getElementById('articles-list');
   if (!disps.length && !acts.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Aucun résultat</div><p>Sélectionnez ⭐ Dispositif ou ⭐ Actualité dans les filtres</p></div>';
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Aucun résultat</div><p>Sélectionnez ⭐ Dispositif ou ⭐ Actualité</p></div>';
     return;
   }
   let html = '';
@@ -1634,25 +1624,26 @@ function renderArticles(list) {
 function renderArticleCards(list, showCollect) {
   return list.map((a, i) => {
     const tags = Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]');
-    const isDisp = tags.includes('⭐ Dispositif');
-    const date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR', {day:'numeric',month:'short'}) : '';
-    const tagsHtml = tags.filter(t => !t.startsWith('⭐')).map(t => {
-      return `<span class="article-tag">${t}</span>`;
-    }).join('');
-    const typeTag = tags.find(t => t.startsWith('⭐'));
-    const typeBadge = typeTag ? `<span class="article-tag ref">${typeTag}</span>` : '';
-    const collectBtn = showCollect ? `<div class="card-collect-row" onclick="event.preventDefault()"><button class="btn-collect" data-url="${a.url}" data-title="${(a.title||'').replace(/"/g,'&quot;')}" data-id="${a.id||0}" onclick="collectFromVeille(event)">⌨ Collecter</button></div>` : '';
+    const isDisp = tags.indexOf('⭐ Dispositif')>=0;
+    const date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}) : '';
+    const subTags = tags.filter(t => !t.startsWith('⭐'));
+    const typeBadge = isDisp ? '<span class="article-tag ref">⭐ Dispositif</span>' : '<span class="article-tag">⭐ Actualité</span>';
+    const tagsHtml = subTags.map(t=>'<span class="article-tag">'+t+'</span>').join('');
+    const cdcInfo = a.pdf_url ? `<a class="cdc-inline-link" href="${a.pdf_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">������ CDC</a>` : '';
+    const safeUrl = (a.url||'').replace(/"/g,'&quot;');
+    const safeTitle = (a.title||'').replace(/"/g,'&quot;');
+    const safePdf = (a.pdf_url||'').replace(/"/g,'&quot;');
+    const collectBtn = showCollect
+      ? `<button class="btn-collect" data-url="${safeUrl}" data-title="${safeTitle}" data-id="${a.id||0}" data-pdf="${safePdf}" onclick="collectFromVeille(event)"><span class="collect-icon">������</span> Collecter</button>`
+      : '';
     return `<a class="article-card${isDisp?' is-dispositif':''}" href="${a.url}" target="_blank" rel="noopener" style="animation-delay:${Math.min(i*0.03,0.4)}s">
       <div class="article-card-top">
-        <div>
-          <div class="article-card-source">${a.source||''}</div>
-          <div class="article-card-date">${date}</div>
-        </div>
+        <div><div class="article-card-source">${a.source||''}</div><div class="article-card-date">${date}</div></div>
         <div class="article-card-title">${a.title}</div>
       </div>
-      ${a.summary ? `<div class="article-card-summary">${a.summary}</div>` : ''}
-      <div class="article-card-tags">${typeBadge}${tagsHtml}</div>
-      ${collectBtn}
+      ${a.summary?`<div class="article-card-summary">${a.summary}</div>`:''}
+      <div class="article-card-tags">${typeBadge}${tagsHtml}${cdcInfo}</div>
+      ${collectBtn ? `<div class="card-collect-row" onclick="event.preventDefault()">${collectBtn}</div>` : ''}
     </a>`;
   }).join('');
 }
@@ -1679,10 +1670,8 @@ function renderDispositifs(list) {
       ${!empty(d.montants_taux) ? `<div class="disp-field"><div class="disp-field-label">Montants & taux</div><div class="disp-field-val">${d.montants_taux}</div></div>` : ''}
       ${!empty(d.date_fermeture) ? `<div class="disp-field"><div class="disp-field-label">Clôture</div><div class="disp-field-val">${d.date_fermeture}</div></div>` : ''}
       <div class="disp-card-footer">
-        <button class="disp-btn primary" onclick="openDispModal(${d.id})">👁️ Détail</button>
-        ${d.source_url ? `<a class="disp-btn" href="${d.source_url}" target="_blank" rel="noopener">������ Source</a>` : ''}
-        ${d.source_url ? `<button class="disp-btn cdc" onclick="fetchCdcForDisp(event,'${d.source_url}')">������ CDC</button>` : ''}
-        <a class="disp-btn" href="/api/dispositifs/${d.id}/export-pptx" target="_blank">������ PPTX</a>
+        <button class="disp-btn primary" onclick="openDispModal(${d.id})">👁 Voir le détail</button>
+        <a class="disp-btn" href="/api/dispositifs/${d.id}/export-pptx" target="_blank">📊 PPTX</a>
       </div>
     </div>`;
   }).join('');
@@ -1784,6 +1773,84 @@ function showToast(msg) {
 
 // ── START ─────────────────────────────────────────────────────────────
 init();
+</script>
+
+<!-- MODAL AUTO-TAG AGENT -->
+<div id="autotag-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:14px;padding:28px;width:420px;max-width:94vw;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+    <div style="font-family:Syne,sans-serif;font-weight:800;font-size:17px;margin-bottom:4px">&#129302; Agent Curation IA</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Tagger automatiquement les articles avec Claude Haiku</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+      <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="at-only-untagged" checked style="accent-color:var(--accent)">
+        Traiter uniquement les articles non tagés
+      </label>
+      <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="at-delete-irrelevant" style="accent-color:#c0392b">
+        <span>Supprimer les articles non pertinents <span style="color:#c0392b;font-weight:700">(irréversible)</span></span>
+      </label>
+      <label style="font-size:12px;display:flex;flex-direction:column;gap:4px">
+        Nombre d’articles à traiter :
+        <input type="number" id="at-limit" value="50" min="5" max="200" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;width:100px">
+      </label>
+    </div>
+    <div id="autotag-progress" style="display:none;margin-bottom:16px">
+      <div style="height:6px;background:var(--surface2);border-radius:4px;overflow:hidden;margin-bottom:8px">
+        <div id="at-bar" style="height:100%;background:var(--lime);border-radius:4px;width:0%;transition:width .3s"></div>
+      </div>
+      <div id="at-status-text" style="font-size:11px;color:var(--muted)">Initialisation…</div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeAutoTagPanel()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;font-size:12px">Annuler</button>
+      <button id="at-start-btn" onclick="startAutoTag()" style="padding:8px 18px;border-radius:8px;border:none;background:var(--accent);color:var(--lime);font-weight:800;cursor:pointer;font-size:12px">&#9654; Lancer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── AUTO-TAG AGENT ──────────────────────────────────────────────
+function openAutoTagPanel() {
+  document.getElementById('autotag-modal').style.display = 'flex';
+  document.getElementById('autotag-progress').style.display = 'none';
+  document.getElementById('at-start-btn').disabled = false;
+  document.getElementById('at-start-btn').textContent = '\u25b6 Lancer';
+}
+function closeAutoTagPanel() {
+  document.getElementById('autotag-modal').style.display = 'none';
+}
+function startAutoTag() {
+  const limit = parseInt(document.getElementById('at-limit').value) || 50;
+  const onlyUntagged = document.getElementById('at-only-untagged').checked;
+  const deleteIrr = document.getElementById('at-delete-irrelevant').checked;
+  document.getElementById('at-start-btn').disabled = true;
+  document.getElementById('autotag-progress').style.display = 'block';
+  document.getElementById('at-status-text').textContent = 'D\u00e9marrage\u2026';
+  fetch(API + '/api/auto-tag', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({limit, only_untagged: onlyUntagged, delete_irrelevant: deleteIrr})
+  }).then(r => r.json()).then(d => {
+    if (d.error) { showToast('\u26a0 ' + d.error); return; }
+    if (d.status === 'no_articles') { showToast('Aucun article \u00e0 traiter'); return; }
+    pollAutoTagStatus();
+  }).catch(e => showToast('\u26a0 Erreur r\u00e9seau'));
+}
+function pollAutoTagStatus() {
+  fetch(API + '/api/auto-tag/status').then(r => r.json()).then(d => {
+    const bar = document.getElementById('at-bar');
+    const txt = document.getElementById('at-status-text');
+    bar.style.width = d.progress + '%';
+    txt.textContent = d.done + '/' + d.total + ' articles \u2014 ' + d.tagged + ' tag\u00e9s, ' + d.deleted + ' supprim\u00e9s, ' + d.errors + ' erreurs';
+    if (d.status === 'running') {
+      setTimeout(pollAutoTagStatus, 1500);
+    } else {
+      txt.textContent = '\u2705 Termin\u00e9 ! ' + d.tagged + ' article(s) tag\u00e9(s), ' + d.deleted + ' supprim\u00e9(s)';
+      document.getElementById('at-start-btn').textContent = '\u2713 Fait';
+      setTimeout(function(){ closeAutoTagPanel(); loadArticles(); }, 2000);
+    }
+  });
+}
+// ────────────────────────────────────────────────────────────────
 </script>
 </body>
 </html>"""
@@ -3491,13 +3558,13 @@ const NanoChart = (() => {
     <div class="ts-divider"></div>
     <div class="ts-item"><span>Scrape toutes les</span> <span class="ts-val">6h</span></div>
   </div>
-  <button class="scrape-btn" onclick="triggerScrape()">⟳ Scraper</button>
+  <button class="scrape-btn" onclick="triggerScrape()">&#8959; Scraper</button>
+  <button class="scrape-btn" id="btn-autotag" onclick="openAutoTagPanel()" style="background:var(--lime);color:var(--accent);font-size:11px" title="Agent IA de curation automatique">🤖 Curation IA</button>
 </div>
 <div class="tabs-bar">
   <button class="tab-btn active" id="tab-feed" onclick="switchTab('feed')">Veille</button>
   <button class="tab-btn" id="tab-sources" onclick="switchTab('sources')">Sources</button>
   <button class="tab-btn" id="tab-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
-  <button class="tab-btn" id="tab-database" onclick="switchTab('database')">Base de données</button>
   <button class="tab-btn" id="tab-360" onclick="switchTab('360')">Veille 360°</button>
   <button class="tab-btn" id="tab-pdf" onclick="switchTab('pdf')">📋 Cahiers des charges</button>
   <a class="tab-btn" href="/consultant" target="_blank" style="margin-left:auto;background:var(--lime);color:var(--accent);font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px">👥 Espace consultants ↗</a>
@@ -3695,16 +3762,7 @@ const NanoChart = (() => {
   </div>
 
   <!-- DATABASE PANEL -->
-  <div class="db-panel" id="panel-database">
-    <div class="db-topbar">
-      <div><div class="db-title">🗄 Base de données — Dispositifs</div><div class="db-sub">Grilles d'analyse structurée collectées depuis la veille</div></div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:7px 14px;" onclick="exportCSV()">⬇ Export CSV</button>
-        <button class="btn btn-primary" onclick="loadDatabase()" style="font-size:11px;padding:7px 14px;">↻ Rafraîchir</button>
-      </div>
-    </div>
-    <div class="db-body"><div id="db-content"><div class="state-box"><div class="spinner"></div></div></div></div>
-  </div>
+  
 
   <!-- PANEL 360 -->
   <div class="src-panel" id="panel-pdf">
@@ -3809,19 +3867,17 @@ let allTags = [];
 
 // -- Tabs ----------------------------------------------------------------------
 function switchTab(tab) {
-  ['feed','sources','dashboard','database','360','pdf'].forEach(t => {
+  ['feed','sources','dashboard','360','pdf'].forEach(t => {
     const el = document.getElementById('tab-'+t);
     if (el) el.classList.toggle('active', t === tab);
   });
   document.querySelector('.main').style.display = tab === 'feed' ? 'flex' : 'none';
   document.getElementById('panel-sources').classList.toggle('active', tab === 'sources');
   document.getElementById('panel-dashboard').classList.toggle('active', tab === 'dashboard');
-  document.getElementById('panel-database').classList.toggle('active', tab === 'database');
   document.getElementById('panel-360').classList.toggle('active', tab === '360');
   document.getElementById('panel-pdf').classList.toggle('active', tab === 'pdf');
   if (tab === 'sources') loadSources();
   if (tab === 'dashboard') loadDashboard();
-  if (tab === 'database') loadDatabase();
 }
 
 // -- Sources -------------------------------------------------------------------
@@ -6215,6 +6271,118 @@ def scrape_now():
     return jsonify({'status': 'started', 'sources': sources_count})
 
 
+
+# ══════════════════════════════════════════════════════════════════
+# AUTO-TAG AGENT
+# ══════════════════════════════════════════════════════════════════
+AUTO_TAG_PROMPT = """Tu es un agent de curation pour une veille sur les financements et politiques publiques françaises.
+
+Pour chaque article, tu dois :
+1. Décider s'il est PERTINENT (dispositif de financement, appel à projets, actualité réglementaire importante) ou NON PERTINENT (généraliste, hors-sujet, trop vague)
+2. Si pertinent, attribuer les tags appropriés parmi la liste ci-dessous
+3. Toujours commencer par soit "⭐ Dispositif" soit "⭐ Actualité" (jamais les deux)
+
+TAGS DISPONIBLES (utilise uniquement ceux qui s'appliquent vraiment) :
+- Type : ⭐ Dispositif, ⭐ Actualité
+- QUI : Association, Collectivité, Entreprise, PME, TPE, ETI, GE, Start-up, Salariés, Jeunesse, ESS/Insertion, DRH
+- QUOI : Agriculture, Industrie, Numérique, Énergie/Décarbonation, Tourisme, Culture, Sport, Logement/Bâtiment, Mobilité
+- QUE : Transition écologique/énergétique, Biodiversité, Innovation, Inclusion sociale, Emploi/Formation, Entrepreneuriat, Développement économique/territorial
+- OÙ : National, Europe, (région si précisée)
+- COMMENT : AAP, AMI, AO, Subvention, Prêt, Crédit d'impôt, France 2030, ADEME, Bpifrance, Banque des territoires
+
+RÈGLES :
+- Si NON PERTINENT : réponds uniquement {"pertinent": false}
+- Si PERTINENT : réponds {"pertinent": true, "tags": ["⭐ Dispositif", "tag2", ...]}
+- Maximum 8 tags par article
+- Réponds UNIQUEMENT en JSON valide, sans commentaire"""
+
+_autotag_job = {'status': 'idle', 'progress': 0, 'total': 0, 'done': 0, 'tagged': 0, 'deleted': 0, 'errors': 0}
+_autotag_lock = threading.Lock()
+
+def _run_autotag(article_ids, delete_irrelevant):
+    global _autotag_job
+    with _autotag_lock:
+        _autotag_job.update({'status':'running','progress':0,'total':len(article_ids),'done':0,'tagged':0,'deleted':0,'errors':0})
+    
+    for i, art_id in enumerate(article_ids):
+        try:
+            conn = get_db(); cur = conn.cursor()
+            cur.execute("SELECT title, summary, url FROM articles WHERE id=%s", (art_id,))
+            row = cur.fetchone()
+            if not row: cur.close(); conn.close(); continue
+            
+            user_msg = f"Titre : {row['title']}\nRésumé : {row.get('summary','') or ''}\nURL : {row['url']}"
+            payload = json.dumps({
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 200,
+                "system": AUTO_TAG_PROMPT,
+                "messages": [{"role":"user","content": user_msg}]
+            }).encode()
+            req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={
+                "Content-Type":"application/json",
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version":"2023-06-01"
+            }, method="POST")
+            with urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read())
+            text = data["content"][0]["text"].strip()
+            m = re.search(r'\{[\s\S]*\}', text)
+            result = json.loads(m.group() if m else text)
+            
+            if not result.get('pertinent', True):
+                if delete_irrelevant:
+                    cur.execute("DELETE FROM articles WHERE id=%s", (art_id,))
+                    conn.commit()
+                    with _autotag_lock: _autotag_job['deleted'] += 1
+            else:
+                tags = result.get('tags', [])
+                if tags:
+                    cur.execute("UPDATE articles SET tags=%s WHERE id=%s AND (tags IS NULL OR tags='[]')",
+                               (json.dumps(tags), art_id))
+                    conn.commit()
+                    with _autotag_lock: _autotag_job['tagged'] += 1
+            cur.close(); conn.close()
+        except Exception as e:
+            log.warning(f"AutoTag error {art_id}: {e}")
+            with _autotag_lock: _autotag_job['errors'] += 1
+        
+        with _autotag_lock:
+            _autotag_job['done'] = i + 1
+            _autotag_job['progress'] = int((i+1)/len(article_ids)*100)
+    
+    with _autotag_lock:
+        _autotag_job['status'] = 'done'
+
+@app.route('/api/auto-tag', methods=['POST'])
+def start_autotag():
+    global _autotag_job
+    if not ANTHROPIC_API_KEY:
+        return jsonify({'error':'ANTHROPIC_API_KEY not configured'}), 500
+    with _autotag_lock:
+        if _autotag_job['status'] == 'running':
+            return jsonify({'status':'already_running'}), 200
+    data = request.get_json() or {}
+    only_untagged = data.get('only_untagged', True)
+    delete_irrelevant = data.get('delete_irrelevant', False)
+    limit = min(int(data.get('limit', 50)), 200)
+    conn = get_db(); cur = conn.cursor()
+    if only_untagged:
+        cur.execute("SELECT id FROM articles WHERE tags IS NULL OR tags='[]' OR tags='[\"\"]' ORDER BY scraped_at DESC LIMIT %s", (limit,))
+    else:
+        cur.execute("SELECT id FROM articles ORDER BY scraped_at DESC LIMIT %s", (limit,))
+    ids = [r['id'] for r in cur.fetchall()]
+    cur.close(); conn.close()
+    if not ids:
+        return jsonify({'status':'no_articles'})
+    t = threading.Thread(target=_run_autotag, args=(ids, delete_irrelevant), daemon=True)
+    t.start()
+    return jsonify({'status':'started', 'count': len(ids)})
+
+@app.route('/api/auto-tag/status', methods=['GET'])
+def autotag_status():
+    with _autotag_lock:
+        return jsonify(dict(_autotag_job))
+
 @app.route('/api/collect', methods=['POST'])
 def collect_dispositif():
     """Fetch a URL, send to Claude, return structured grid."""
@@ -6227,26 +6395,70 @@ def collect_dispositif():
     if not ANTHROPIC_API_KEY:
         return jsonify({'error':'ANTHROPIC_API_KEY not configured'}),500
 
-    # Fetch the page content
+    # Fetch content — CDC en priorité, sinon page HTML
     page_text = ''
-    try:
-        headers = {
-            'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept-Language':'fr-FR,fr;q=0.9',
-        }
-        req = Request(url, headers=headers)
-        with urlopen(req, timeout=20) as resp:
-            raw = resp.read(200000).decode('utf-8', errors='ignore')
-        # Strip tags for cleaner text
-        page_text = re.sub(r'<[^>]+>', ' ', raw)
-        page_text = re.sub(r'\s+', ' ', page_text).strip()[:8000]
-    except Exception as e:
-        log.warning(f"Fetch error {url}: {e}")
-        page_text = f"Titre : {title}\nURL : {url}\n(Contenu non accessible)"
+    pdf_url = data.get('pdf_url', '')
+    source_used = 'page'
+
+    # Si article_id fourni, récupérer pdf_url depuis la DB
+    if article_id and not pdf_url:
+        try:
+            conn_tmp = get_db(); cur_tmp = conn_tmp.cursor()
+            cur_tmp.execute("SELECT pdf_url FROM articles WHERE id=%s", (article_id,))
+            row_tmp = cur_tmp.fetchone()
+            if row_tmp and row_tmp['pdf_url']:
+                pdf_url = row_tmp['pdf_url']
+            cur_tmp.close(); conn_tmp.close()
+        except Exception:
+            pass
+
+    # Si pas de CDC connu, tenter de le scraper maintenant
+    if not pdf_url:
+        try:
+            pdf_url = _scrape_pdf_url(url)
+        except Exception:
+            pass
+
+    # Priorité 1 : télécharger et lire le CDC (PDF/doc)
+    if pdf_url and pdf_url.lower().split('?')[0].endswith(('.pdf','.doc','.docx')):
+        try:
+            req_cdc = Request(pdf_url, headers={'User-Agent':'Mozilla/5.0'})
+            with urlopen(req_cdc, timeout=20) as resp_cdc:
+                raw_cdc = resp_cdc.read(300000)
+            # Extraction texte brut du PDF via pdfminer si dispo, sinon décodage
+            try:
+                from io import BytesIO
+                from pdfminer.high_level import extract_text as pdf_extract
+                page_text = pdf_extract(BytesIO(raw_cdc))[:8000]
+                source_used = 'cdc_pdf'
+            except Exception:
+                # Fallback : décodage brut
+                page_text = raw_cdc.decode('utf-8', errors='ignore')[:8000]
+                source_used = 'cdc_raw'
+        except Exception as e:
+            log.warning(f"CDC fetch error {pdf_url}: {e}")
+
+    # Priorité 2 : page HTML
+    if not page_text:
+        try:
+            headers_html = {
+                'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept-Language':'fr-FR,fr;q=0.9',
+            }
+            req_html = Request(url, headers=headers_html)
+            with urlopen(req_html, timeout=20) as resp_html:
+                raw_html = resp_html.read(200000).decode('utf-8', errors='ignore')
+            page_text = re.sub(r'<[^>]+>', ' ', raw_html)
+            page_text = re.sub(r'\s+', ' ', page_text).strip()[:8000]
+        except Exception as e:
+            log.warning(f"Fetch error {url}: {e}")
+            page_text = f"Titre : {title}\nURL : {url}\n(Contenu non accessible)"
 
     # Call Claude
     try:
-        user_content = f"Analyse ce dispositif et remplis la grille.\n\nTitre : {title}\nURL : {url}\n\nContenu de la page :\n{page_text}"
+        cdc_mention = f"\nCahier des charges : {pdf_url}" if pdf_url else ""
+        source_note = f"\n[Source analysée : {source_used}]"
+        user_content = f"Analyse ce dispositif et remplis la grille.{cdc_mention}\n\nTitre : {title}\nURL : {url}{source_note}\n\nContenu :\n{page_text}"
         payload = json.dumps({
             "model": "claude-haiku-4-5-20251001",
             "max_tokens": 2000,
@@ -6265,6 +6477,7 @@ def collect_dispositif():
         result = json.loads(m.group() if m else text)
         result['source_url'] = url
         result['article_id'] = article_id
+        if pdf_url: result['cdc_url'] = pdf_url  # stocker le CDC dans la fiche
         return jsonify(result)
     except Exception as e:
         log.error(f"Collect Claude error: {e}")
