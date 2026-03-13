@@ -4248,9 +4248,7 @@ const NanoChart = (() => {
       <button class="btn-tag-sel" id="btn-tag" onclick="tagSelected()" disabled title="Tagger via IA">
         🏷 Tagger
       </button>
-      <button class="btn-tag-sel" id="btn-collect-sel" onclick="collectSelection()" disabled title="Collecter le dispositif via IA" style="background:var(--surface2);border-color:var(--border);color:var(--text)">
-        📥 Collecter
-      </button>
+
     </div>
     <div class="tag-progress" id="tag-progress">
       <span id="tag-prog-text">Tagging en cours…</span>
@@ -4369,35 +4367,26 @@ const NanoChart = (() => {
   <!-- PANEL 360 -->
   <div class="src-panel" id="panel-pdf">
     <div class="src-topbar">
-      <span style="font-size:15px;font-weight:800;">📋 Cahiers des charges</span>
+      <div>
+        <div class="src-title">📋 Cahiers des charges</div>
+        <div class="src-sub">CDC manquants sur tous les articles de la base</div>
+      </div>
+      <button class="btn btn-primary" onclick="cdcScanAll()" id="btn-pdf-scan-all" style="font-size:12px;padding:8px 18px;">
+        🔍 Rechercher tous les CDC manquants
+      </button>
     </div>
-    <div style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px;">
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;">
-        <p style="color:var(--text2);font-size:13px;margin:0 0 16px">Recherche automatique des cahiers des charges et documents PDF liés aux articles. Sélectionnez des articles (coches) ou scannez tout.</p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
-            <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:200px">
-              <label style="font-size:11px;color:var(--text2);font-weight:600">Nombre d'articles à scanner : <span id="cdc-slider-val" style="color:var(--accent)">200</span> (les plus récents)</label>
-              <input type="range" id="cdc-slider" min="10" max="500" step="10" value="200"
-                style="width:100%;accent-color:var(--accent3)"
-                oninput="document.getElementById('cdc-slider-val').textContent=this.value">
-            </div>
-          </div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <button class="btn-primary" onclick="cdcScanSelection()" id="btn-pdf-scan">🔍 Scanner la sélection cochée</button>
-            <button class="btn-primary" onclick="cdcScanAll()" id="btn-pdf-scan-all">🔍 Scanner les N plus récents</button>
-            <button style="background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600" onclick="cdcAnalyzeAI()" id="btn-pdf-ai">🤖 Analyser avec l'IA</button>
-          </div>
-        </div>
-        <div style="background:rgba(200,232,78,0.08);border:1px solid var(--accent3);border-radius:8px;padding:10px;font-size:12px;color:var(--text2)">
-          ⚠️ <strong style="color:var(--accent)">IA uniquement sur sélection</strong> — utilise des crédits API Claude. Le scanner simple est gratuit.
-        </div>
+    <div style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:10px;">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:13px;color:var(--text2);line-height:1.6;">
+        <strong style="color:var(--accent);">Comment ça marche ?</strong><br>
+        Lance un scan sur <strong>tous les articles</strong> qui n’ont pas encore de CDC détecté.
+        Le scraper cherche les liens PDF dans la page de chaque article et enregistre l’URL du CDC trouvé.
+        Les CDC sont normalement détectés automatiquement au scraping &mdash; ce bouton permet de rattraper les oublis.
       </div>
       <div id="cdc-status" style="color:var(--text2);font-size:13px;padding:0 4px"></div>
       <div id="cdc-results-list" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
   </div>
-  <div class="src-panel" id="panel-360">
+<div class="src-panel" id="panel-360">
     <div class="src-topbar">
       <span style="font-size:15px;font-weight:800;">🔍 Veille 360° — Ingénierie financière CAPEX</span>
     </div>
@@ -6463,12 +6452,10 @@ function renderArticles(list) {
         summary + tags +
       '</div>' +
       '<div class="card-menu-wrap" onclick="event.stopPropagation()">' +
-        (a.pdf_url ? '<a class="card-pdf-btn" href="' + a.pdf_url + '" target="_blank" rel="noopener" title="Ouvrir le cahier des charges" data-pdf="1">📋</a>' : '<span class="card-pdf-btn card-pdf-empty" title="Aucun cahier des charges trouvé — cliquez sur ··· > Chercher cahier des charges">📋</span>') +
+        (a.pdf_url ? '<a class="card-pdf-btn" href="' + a.pdf_url + '" target="_blank" rel="noopener" title="Ouvrir le cahier des charges" data-pdf="1">📋</a>' : '<span class="card-pdf-btn card-pdf-empty" title="Aucun CDC détecté au scraping — utilisez le volet CDC pour scanner">📋</span>') +
         '<button class="card-menu-btn" onclick="toggleMenu(event,' + a.id + ')">&#8942;</button>' +
         '<div class="card-menu" id="menu-' + a.id + '">' +
           '<div class="card-menu-item" onclick="openArticleUrl(' + jsAttr(a.url) + ')">Ouvrir la fiche</div>' +
-          '<div class="card-menu-item" onclick="collectDispositif(' + a.id + ')">Collecter le dispositif</div>' +
-          '<div class="card-menu-item" onclick="fetchCDC(' + a.id + ')">📋 Chercher cahier des charges</div>' +
           '<div class="card-menu-sep"></div>' +
           '<div class="card-menu-item" onclick="tagSingle(' + a.id + ')">Tagger cet article</div>' +
         '</div>' +
@@ -6538,27 +6525,22 @@ async function cdcScanSelection() {
 }
 
 async function cdcScanAll() {
-  const slider = document.getElementById('cdc-slider');
-  const limit = slider ? parseInt(slider.value) : 200;
+  const btn = document.getElementById('btn-pdf-scan-all');
+  if (btn) { btn.disabled = true; btn.textContent = '\u23f3 Chargement…'; }
   let ids = [];
   try {
-    const params = new URLSearchParams();
-    if (currentFilter.cat)    params.set('cat', currentFilter.cat);
-    if (currentFilter.region) params.set('region', currentFilter.region);
-    params.set('limit', String(limit));
-    // Les plus récents en premier (ORDER BY scraped_at DESC est le défaut)
-    const res = await fetch(API + '/api/articles?' + params.toString());
+    // Charger TOUS les articles sans CDC (pas de limite, pas de filtre par dossier)
+    const res = await fetch(API + '/api/articles?limit=2000');
     const data = await res.json();
     const all = Array.isArray(data) ? data : (data.articles || []);
-    // Priorité articles sans CDC, sinon tous
-    const withoutCDC = all.filter(a => !a.pdf_url);
-    ids = (withoutCDC.length ? withoutCDC : all).map(a => a.id).filter(Boolean);
+    ids = all.filter(a => !a.pdf_url).map(a => a.id).filter(Boolean);
   } catch(e) {
-    ids = Array.from(document.querySelectorAll('[id^="card-"]'))
-      .map(el => parseInt(el.id.replace('card-', ''))).filter(n => !isNaN(n)).slice(0, limit);
+    if (btn) { btn.disabled = false; btn.textContent = '\ud83d\udd0d Rechercher tous les CDC manquants'; }
+    showToast('\u274c Erreur chargement articles'); return;
   }
-  if (!ids.length) { showToast('Aucun article à scanner'); return; }
-  if (!confirm('Scanner ' + ids.length + ' articles (les plus récents) en arrière-plan ?')) return;
+  if (btn) { btn.disabled = false; btn.textContent = '\ud83d\udd0d Rechercher tous les CDC manquants'; }
+  if (!ids.length) { showToast('\u2705 Aucun article sans CDC \u2014 tout est d\u00e9j\u00e0 à jour !'); return; }
+  if (!confirm('Rechercher les CDC manquants sur ' + ids.length + ' article(s) ?')) return;
   await _runCDCScan(ids, false);
 }
 
