@@ -1840,11 +1840,11 @@ function pollAutoTagStatus() {
     const bar = document.getElementById('at-bar');
     const txt = document.getElementById('at-status-text');
     bar.style.width = d.progress + '%';
-    txt.textContent = d.done + '/' + d.total + ' articles \u2014 ' + d.tagged + ' tag\u00e9s, ' + d.deleted + ' supprim\u00e9s, ' + d.errors + ' erreurs';
+    txt.textContent = d.done + '/' + d.total + ' articles \u2014 ' + d.tagged + ' tag\u00e9s, ' + (d.skipped||0) + ' ignor\u00e9s, ' + d.errors + ' erreurs';
     if (d.status === 'running') {
       setTimeout(pollAutoTagStatus, 1500);
     } else {
-      txt.textContent = '\u2705 Termin\u00e9 ! ' + d.tagged + ' article(s) tag\u00e9(s), ' + d.deleted + ' supprim\u00e9(s)';
+      txt.textContent = '\u2705 Termin\u00e9 ! ' + d.tagged + ' article(s) tag\u00e9(s) \u2014 dont heuristiques, ' + (d.skipped||0) + ' ignor\u00e9s';
       document.getElementById('at-start-btn').textContent = '\u2713 Fait';
       setTimeout(function(){ closeAutoTagPanel(); loadArticles(); }, 2000);
     }
@@ -4169,7 +4169,7 @@ const NanoChart = (() => {
   <button class="tab-btn" id="tab-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
   <button class="tab-btn" id="tab-360" onclick="switchTab('360')">Veille 360°</button>
   <button class="tab-btn" id="tab-pdf" onclick="switchTab('pdf')">📋 Cahiers des charges</button>
-  <a class="tab-btn" href="/consultant" style="margin-left:auto;background:var(--lime);color:var(--accent);font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px">👥 Espace consultants ↗</a>
+  <a class="tab-btn" href="/consultant" style="margin-left:auto;background:var(--lime);color:var(--accent);font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px">📥 Espace collecte ↗</a>
 </div>
 
 <div class="app">
@@ -6888,56 +6888,103 @@ _autotag_job = {'status': 'idle', 'progress': 0, 'total': 0, 'done': 0, 'tagged'
 _autotag_lock = threading.Lock()
 
 def _run_autotag(article_ids, delete_irrelevant):
+    """
+    Curation IA économe — 3 niveaux de traitement :
+    1. Article avec CDC (pdf_url) → appel Claude (signal fort = dispositif)
+    2. Titre contient mot-clé fort → appel Claude (probable dispositif)
+    3. Aucun signal → tag heuristique "⭐ Actualité" sans appel API
+    Objectif : minimiser les appels Claude tout en curant les contenus à valeur.
+    """
     global _autotag_job
     with _autotag_lock:
-        _autotag_job.update({'status':'running','progress':0,'total':len(article_ids),'done':0,'tagged':0,'deleted':0,'errors':0})
-    
+        _autotag_job.update({'status':'running','progress':0,'total':len(article_ids),
+                             'done':0,'tagged':0,'skipped':0,'errors':0})
+
+    # Mots-clés forts = signal dispositif
+    KEYWORDS_FORT = [
+        'appel à projets', 'appel a projets', "appel d'offres", 'appel d offres',
+        'aap', 'ami ', 'appel à manifestation', 'appel a manifestation',
+        'subvention', 'dispositif', 'financement', 'aide aux', 'aides aux',
+        'feder', 'fse', 'france 2030', 'bpifrance', 'ademe',
+        'banque des territoires', 'programme européen', 'programme europeen',
+        'appel à candidature', 'appel a candidature',
+        'ouverture des candidatures', 'dépôt de dossier', 'depot de dossier',
+        'guichet ouvert', 'eligib', 'bénéficiaires', 'beneficiaires',
+    ]
+
+    def has_strong_signal(title, pdf_url):
+        if pdf_url:  # CDC détecté = dispositif quasi-certain
+            return True
+        t = (title or '').lower()
+        return any(kw in t for kw in KEYWORDS_FORT)
+
     for i, art_id in enumerate(article_ids):
         try:
             conn = get_db(); cur = conn.cursor()
-            cur.execute("SELECT title, summary, url FROM articles WHERE id=%s", (art_id,))
+            cur.execute("SELECT title, summary, url, pdf_url FROM articles WHERE id=%s", (art_id,))
             row = cur.fetchone()
-            if not row: cur.close(); conn.close(); continue
-            
-            user_msg = f"Titre : {row['title']}\nRésumé : {row.get('summary','') or ''}\nURL : {row['url']}"
-            payload = json.dumps({
-                "model": "claude-haiku-4-5-20251001",
-                "max_tokens": 200,
-                "system": AUTO_TAG_PROMPT,
-                "messages": [{"role":"user","content": user_msg}]
-            }).encode()
-            req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={
-                "Content-Type":"application/json",
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version":"2023-06-01"
-            }, method="POST")
-            with urlopen(req, timeout=30) as resp:
-                data = json.loads(resp.read())
-            text = data["content"][0]["text"].strip()
-            m = re.search(r'\{[\s\S]*\}', text)
-            result = json.loads(m.group() if m else text)
-            
-            if not result.get('pertinent', True):
-                if delete_irrelevant:
-                    cur.execute("DELETE FROM articles WHERE id=%s", (art_id,))
-                    conn.commit()
-                    with _autotag_lock: _autotag_job['deleted'] += 1
-            else:
-                tags = result.get('tags', [])
+            if not row:
+                cur.close(); conn.close()
+                continue
+
+            title   = row['title'] or ''
+            summary = row.get('summary', '') or ''
+            url     = row['url'] or ''
+            pdf_url = row.get('pdf_url') or ''
+
+            if has_strong_signal(title, pdf_url):
+                # ── Appel Claude (Haiku = le moins cher) ──────────────────────
+                context = f"Titre : {title}\nRésumé : {summary[:300]}\nURL : {url}"
+                if pdf_url:
+                    context += f"\nCDC/PDF détecté : {pdf_url}"
+                payload = json.dumps({
+                    "model": "claude-haiku-4-5-20251001",
+                    "max_tokens": 200,
+                    "system": AUTO_TAG_PROMPT,
+                    "messages": [{"role": "user", "content": context}]
+                }).encode()
+                req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01"
+                }, method="POST")
+                with urlopen(req, timeout=30) as resp:
+                    resp_data = json.loads(resp.read())
+                text = resp_data["content"][0]["text"].strip()
+                m_json = re.search(r'\{[\s\S]*\}', text)
+                result = json.loads(m_json.group() if m_json else text)
+
+                tags = result.get('tags', []) if result.get('pertinent', True) else []
                 if tags:
-                    cur.execute("UPDATE articles SET tags=%s WHERE id=%s AND (tags IS NULL OR tags='[]')",
-                               (json.dumps(tags), art_id))
+                    cur.execute(
+                        "UPDATE articles SET tags=%s WHERE id=%s AND (tags IS NULL OR tags='[]' OR tags='[\"\"]')",
+                        (json.dumps(tags), art_id)
+                    )
                     conn.commit()
                     with _autotag_lock: _autotag_job['tagged'] += 1
+                else:
+                    with _autotag_lock: _autotag_job['skipped'] += 1
+
+            else:
+                # ── Heuristique sans API : tag Actualité ──────────────────────
+                tags = ['⭐ Actualité']
+                cur.execute(
+                    "UPDATE articles SET tags=%s WHERE id=%s AND (tags IS NULL OR tags='[]' OR tags='[\"\"]')",
+                    (json.dumps(tags), art_id)
+                )
+                conn.commit()
+                with _autotag_lock: _autotag_job['tagged'] += 1
+
             cur.close(); conn.close()
+
         except Exception as e:
-            log.warning(f"AutoTag error {art_id}: {e}")
+            log.warning(f"AutoTag error art_id={art_id}: {e}")
             with _autotag_lock: _autotag_job['errors'] += 1
-        
+
         with _autotag_lock:
             _autotag_job['done'] = i + 1
-            _autotag_job['progress'] = int((i+1)/len(article_ids)*100)
-    
+            _autotag_job['progress'] = int((i + 1) / len(article_ids) * 100)
+
     with _autotag_lock:
         _autotag_job['status'] = 'done'
 
