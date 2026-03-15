@@ -2276,13 +2276,13 @@ footer {
           </svg>
         </div>
         <div class="ename">Espace Projet</div>
-        <p class="edesc">L'espace d&eacute;di&eacute; &agrave; chaque consultant. Suivi de dossiers clients, matching IA et propositions cibl&eacute;es.</p>
-        <ul class="efeats">
-          <li><span class="fdot"></span>Espace individuel s&eacute;curis&eacute; par consultant (login)</li>
-          <li><span class="fdot"></span>Portefeuille clients et dossiers actifs</li>
-          <li><span class="fdot"></span>Matching dispositifs &times; profil porteur (IA)</li>
-          <li><span class="fdot"></span>Analyse liasses fiscales &rarr; &eacute;ligibilit&eacute; automatique</li>
-          <li><span class="fdot"></span>CRM int&eacute;gr&eacute; &amp; prospection sortante</li>
+        <p class="edesc" style="color:#9a9a90;font-style:italic;">En programmation</p>
+        <ul class="efeats" style="display:none">
+          <li><span class="fdot"></span>placeholder</li>
+          <li><span class="fdot"></span>placeholder</li>
+          <li><span class="fdot"></span>placeholder</li>
+          <li><span class="fdot"></span>placeholder automatique</li>
+          <li><span class="fdot"></span>placeholder</li>
         </ul>
         <span class="eurl">Disponible prochainement</span>
         <button class="ebtn" disabled>Bient&ocirc;t disponible</button>
