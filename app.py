@@ -6685,6 +6685,86 @@ setInterval(() => { loadStats(); loadNav(); }, 300000);
 init();
 
 </script>
+
+
+<!-- MODAL AUTO-TAG AGENT -->
+<div id="autotag-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:14px;padding:28px;width:420px;max-width:94vw;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+    <div style="font-family:Syne,sans-serif;font-weight:800;font-size:17px;margin-bottom:4px">&#129302; Agent Curation IA</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Tagger automatiquement les articles avec Claude Haiku</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+      <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="at-only-untagged" checked style="accent-color:var(--accent)">
+        Traiter uniquement les articles non tagés
+      </label>
+      <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="at-delete-irrelevant" style="accent-color:#c0392b">
+        <span>Supprimer les articles non pertinents <span style="color:#c0392b;font-weight:700">(irréversible)</span></span>
+      </label>
+      <label style="font-size:12px;display:flex;flex-direction:column;gap:4px">
+        Nombre d’articles à traiter :
+        <input type="number" id="at-limit" value="50" min="5" max="200" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;width:100px">
+      </label>
+    </div>
+    <div id="autotag-progress" style="display:none;margin-bottom:16px">
+      <div style="height:6px;background:var(--surface2);border-radius:4px;overflow:hidden;margin-bottom:8px">
+        <div id="at-bar" style="height:100%;background:var(--lime);border-radius:4px;width:0%;transition:width .3s"></div>
+      </div>
+      <div id="at-status-text" style="font-size:11px;color:var(--muted)">Initialisation…</div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeAutoTagPanel()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;font-size:12px">Annuler</button>
+      <button id="at-start-btn" onclick="startAutoTag()" style="padding:8px 18px;border-radius:8px;border:none;background:var(--accent);color:var(--lime);font-weight:800;cursor:pointer;font-size:12px">&#9654; Lancer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── AUTO-TAG AGENT ──────────────────────────────────────────────
+function openAutoTagPanel() {
+  document.getElementById('autotag-modal').style.display = 'flex';
+  document.getElementById('autotag-progress').style.display = 'none';
+  document.getElementById('at-start-btn').disabled = false;
+  document.getElementById('at-start-btn').textContent = '\u25b6 Lancer';
+}
+function closeAutoTagPanel() {
+  document.getElementById('autotag-modal').style.display = 'none';
+}
+function startAutoTag() {
+  const limit = parseInt(document.getElementById('at-limit').value) || 50;
+  const onlyUntagged = document.getElementById('at-only-untagged').checked;
+  const deleteIrr = document.getElementById('at-delete-irrelevant').checked;
+  document.getElementById('at-start-btn').disabled = true;
+  document.getElementById('autotag-progress').style.display = 'block';
+  document.getElementById('at-status-text').textContent = 'D\u00e9marrage\u2026';
+  fetch(API + '/api/auto-tag', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({limit, only_untagged: onlyUntagged, delete_irrelevant: deleteIrr})
+  }).then(r => r.json()).then(d => {
+    if (d.error) { showToast('\u26a0 ' + d.error); return; }
+    if (d.status === 'no_articles') { showToast('Aucun article \u00e0 traiter'); return; }
+    pollAutoTagStatus();
+  }).catch(e => showToast('\u26a0 Erreur r\u00e9seau'));
+}
+function pollAutoTagStatus() {
+  fetch(API + '/api/auto-tag/status').then(r => r.json()).then(d => {
+    const bar = document.getElementById('at-bar');
+    const txt = document.getElementById('at-status-text');
+    bar.style.width = d.progress + '%';
+    txt.textContent = d.done + '/' + d.total + ' articles \u2014 ' + d.tagged + ' tag\u00e9s, ' + (d.skipped||0) + ' ignor\u00e9s, ' + d.errors + ' erreurs';
+    if (d.status === 'running') {
+      setTimeout(pollAutoTagStatus, 1500);
+    } else {
+      txt.textContent = '\u2705 Termin\u00e9 ! ' + d.tagged + ' article(s) tag\u00e9(s) \u2014 dont heuristiques, ' + (d.skipped||0) + ' ignor\u00e9s';
+      document.getElementById('at-start-btn').textContent = '\u2713 Fait';
+      setTimeout(function(){ closeAutoTagPanel(); loadArticles(); }, 2000);
+    }
+  });
+}
+// ────────────────────────────────────────────────────────────────
+</script>
+
 </body>
 </html>
 """
