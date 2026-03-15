@@ -6535,10 +6535,10 @@ async function cdcScanAll() {
     const all = Array.isArray(data) ? data : (data.articles || []);
     ids = all.filter(a => !a.pdf_url).map(a => a.id).filter(Boolean);
   } catch(e) {
-    if (btn) { btn.disabled = false; btn.textContent = '\ud83d\udd0d Rechercher tous les CDC manquants'; }
+    if (btn) { btn.disabled = false; btn.textContent = '🔍 Rechercher tous les CDC manquants'; }
     showToast('\u274c Erreur chargement articles'); return;
   }
-  if (btn) { btn.disabled = false; btn.textContent = '\ud83d\udd0d Rechercher tous les CDC manquants'; }
+  if (btn) { btn.disabled = false; btn.textContent = '🔍 Rechercher tous les CDC manquants'; }
   if (!ids.length) { showToast('\u2705 Aucun article sans CDC \u2014 tout est d\u00e9j\u00e0 à jour !'); return; }
   if (!confirm('Rechercher les CDC manquants sur ' + ids.length + ' article(s) ?')) return;
   await _runCDCScan(ids, false);
