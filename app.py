@@ -1362,8 +1362,35 @@ body {
 
     <!-- PANEL DISPOSITIFS -->
     <div class="panel" id="panel-dispositifs">
-      <div class="sort-row">
+      <div class="sort-row" style="gap:8px;flex-wrap:wrap;">
         <span class="result-count" id="disp-count">— dispositifs</span>
+        <div style="display:flex;gap:6px;align-items:center;flex:1;flex-wrap:wrap;">
+          <input id="disp-search" placeholder="Rechercher…" oninput="filterDispositifs()"
+            style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text);outline:none;min-width:140px;flex:1;">
+          <select id="disp-filter-benef" onchange="filterDispositifs()"
+            style="padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text);outline:none;cursor:pointer;">
+            <option value="">Tous bénéficiaires</option>
+            <option>Collectivité</option><option>Entreprise</option><option>PME</option>
+            <option>TPE</option><option>ETI</option><option>Association</option>
+            <option>Start-up</option><option>ESS/Insertion</option>
+            <option>Particulier</option><option>Agriculteur</option>
+          </select>
+          <select id="disp-filter-territoire" onchange="filterDispositifs()"
+            style="padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text);outline:none;cursor:pointer;">
+            <option value="">Tous territoires</option>
+            <option>National</option><option>Europe</option>
+            <option>Nouvelle-Aquitaine</option><option>Occitanie</option>
+            <option>Auvergne-Rhône-Alpes</option><option>Bretagne</option>
+            <option>Normandie</option><option>Hauts-de-France</option>
+            <option>Île-de-France</option><option>Grand Est</option>
+            <option>Pays de la Loire</option><option>PACA</option>
+            <option>Bourgogne-FC</option><option>Centre-Val de Loire</option>
+          </select>
+          <button onclick="collectAllMissing()" id="btn-collect-all"
+            style="padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--accent);background:var(--accent);color:var(--lime);white-space:nowrap;">
+            📥 Tout collecter
+          </button>
+        </div>
       </div>
       <div class="disp-grid" id="disp-grid">
         <div class="spinner"></div>
@@ -1443,12 +1470,15 @@ function collectFromVeille(e) {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({url:url, title:title, id:artId, pdf_url:pdfUrl})
-  }).then(function(r){ return r.json(); }).then(function(d) {
+  }).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function(d) {
     if (d.status==='duplicate') {
       btn.innerHTML = '✓ Déjà collecté';
       btn.style.cssText='background:#e8f5b0;color:#3a6020;border-color:#3a6020';
     } else if (d.error) {
-      btn.innerHTML = '⚠ Erreur'; btn.disabled=false;
+      btn.innerHTML = '⚠ ' + (d.error.length < 40 ? d.error : 'Erreur'); btn.disabled=false;
     } else {
       // Sauvegarder dans la base
       return fetch(API+'/api/dispositifs',{
@@ -1660,13 +1690,14 @@ function renderDispositifs(list) {
     const empty = v => !v || v === 'Information non fournie';
     return `<div class="disp-card">
       <div class="disp-card-header">
-        <div class="disp-card-icon">💰</div>
+        <div class="disp-card-icon">📄</div>
         <div>
           <div class="disp-card-title">${d.titre || 'Dispositif'}</div>
           <div class="disp-card-financeur">${d.guichet_financeur || ''}</div>
         </div>
       </div>
       ${!empty(d.beneficiaire) ? `<div class="disp-field"><div class="disp-field-label">Bénéficiaires</div><div class="disp-field-val">${d.beneficiaire}</div></div>` : ''}
+      ${!empty(d.territoire) ? `<div class="disp-field"><div class="disp-field-label">Territoire</div><div class="disp-field-val">${d.territoire}</div></div>` : ''}
       ${!empty(d.montants_taux) ? `<div class="disp-field"><div class="disp-field-label">Montants & taux</div><div class="disp-field-val">${d.montants_taux}</div></div>` : ''}
       ${!empty(d.date_fermeture) ? `<div class="disp-field"><div class="disp-field-label">Clôture</div><div class="disp-field-val">${d.date_fermeture}</div></div>` : ''}
       <div class="disp-card-footer">
@@ -1675,6 +1706,72 @@ function renderDispositifs(list) {
       </div>
     </div>`;
   }).join('');
+}
+
+// ── FILTER DISPOSITIFS ───────────────────────────────────────────────
+function filterDispositifs() {
+  const q      = (document.getElementById('disp-search')?.value || '').toLowerCase();
+  const benef  = (document.getElementById('disp-filter-benef')?.value || '').toLowerCase();
+  const terr   = (document.getElementById('disp-filter-territoire')?.value || '').toLowerCase();
+  let list = allDispositifs;
+  if (q)     list = list.filter(d => (d.titre||'').toLowerCase().includes(q) || (d.guichet_financeur||'').toLowerCase().includes(q));
+  if (benef) list = list.filter(d => (d.beneficiaire||'').toLowerCase().includes(benef));
+  if (terr)  list = list.filter(d => (d.territoire||'').toLowerCase().includes(terr));
+  renderDispositifs(list);
+}
+
+// ── COLLECT ALL MISSING ───────────────────────────────────────────────
+async function collectAllMissing() {
+  // Récupérer les articles de type Dispositif non encore collectés
+  const btn = document.getElementById('btn-collect-all');
+  btn.disabled = true;
+  btn.textContent = '⏳ Chargement…';
+  try {
+    // Charger tous les articles dispositifs
+    const arts = await fetch(API + '/api/articles?limit=2000').then(r => r.json());
+    const collected = new Set(allDispositifs.map(d => d.source_url).filter(Boolean));
+    const toCollect = arts.filter(a => {
+      const tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+      return tags.includes('⭐ Dispositif') && !collected.has(a.url);
+    });
+    if (!toCollect.length) {
+      showToast('✅ Tous les dispositifs sont déjà collectés !');
+      btn.disabled = false;
+      btn.innerHTML = '📥 Tout collecter';
+      return;
+    }
+    if (!confirm('Collecter ' + toCollect.length + ' dispositif(s) non encore collectés ? Cela utilisera des crédits API Claude.')) {
+      btn.disabled = false;
+      btn.innerHTML = '📥 Tout collecter';
+      return;
+    }
+    btn.textContent = '⏳ 0/' + toCollect.length;
+    let done = 0, errors = 0;
+    for (const a of toCollect) {
+      try {
+        const d = await fetch(API + '/api/collect', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({url: a.url, title: a.title, id: a.id, pdf_url: a.pdf_url || ''})
+        }).then(r => r.json());
+        if (!d.error) {
+          await fetch(API + '/api/dispositifs', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(d)
+          });
+          done++;
+        } else { errors++; }
+      } catch(e) { errors++; }
+      btn.textContent = '⏳ ' + (done + errors) + '/' + toCollect.length;
+    }
+    showToast('✅ ' + done + ' collecté(s)' + (errors ? ' — ' + errors + ' erreur(s)' : ''));
+    loadDispositifs();
+  } catch(e) {
+    showToast('❌ Erreur : ' + e.message);
+  }
+  btn.disabled = false;
+  btn.innerHTML = '📥 Tout collecter';
 }
 
 // ── RENDER CDC ────────────────────────────────────────────────────────
@@ -1707,7 +1804,7 @@ function openDispModal(id) {
   const d = allDispositifs.find(x => x.id === id);
   if (!d) return;
   currentDispId = id;
-  document.getElementById('modal-title').textContent = '💰 ' + (d.titre || 'Dispositif');
+  document.getElementById('modal-title').textContent = '📄 ' + (d.titre || 'Dispositif');
   const fields = [
     ['Guichet financeur', d.guichet_financeur],
     ['Guichet instructeur', d.guichet_instructeur],
@@ -7110,12 +7207,10 @@ def collect_dispositif():
     if not ANTHROPIC_API_KEY:
         return jsonify({'error':'ANTHROPIC_API_KEY not configured'}),500
 
-    # Fetch content — CDC en priorité, sinon page HTML
     page_text = ''
     pdf_url = data.get('pdf_url', '')
     source_used = 'page'
 
-    # Si article_id fourni, récupérer pdf_url depuis la DB
     if article_id and not pdf_url:
         try:
             conn_tmp = get_db(); cur_tmp = conn_tmp.cursor()
@@ -7127,56 +7222,51 @@ def collect_dispositif():
         except Exception:
             pass
 
-    # Si pas de CDC connu, tenter de le scraper maintenant
     if not pdf_url:
         try:
             pdf_url = _scrape_pdf_url(url)
         except Exception:
             pass
 
-    # Priorité 1 : télécharger et lire le CDC (PDF/doc)
+    # Priorite 1 : CDC PDF (timeout 12s)
     if pdf_url and pdf_url.lower().split('?')[0].endswith(('.pdf','.doc','.docx')):
         try:
             req_cdc = Request(pdf_url, headers={'User-Agent':'Mozilla/5.0'})
-            with urlopen(req_cdc, timeout=20) as resp_cdc:
-                raw_cdc = resp_cdc.read(300000)
-            # Extraction texte brut du PDF via pdfminer si dispo, sinon décodage
+            with urlopen(req_cdc, timeout=12) as resp_cdc:
+                raw_cdc = resp_cdc.read(150000)
             try:
                 from io import BytesIO
                 from pdfminer.high_level import extract_text as pdf_extract
-                page_text = pdf_extract(BytesIO(raw_cdc))[:8000]
+                page_text = pdf_extract(BytesIO(raw_cdc))[:6000]
                 source_used = 'cdc_pdf'
             except Exception:
-                # Fallback : décodage brut
-                page_text = raw_cdc.decode('utf-8', errors='ignore')[:8000]
+                page_text = raw_cdc.decode('utf-8', errors='ignore')[:6000]
                 source_used = 'cdc_raw'
         except Exception as e:
             log.warning(f"CDC fetch error {pdf_url}: {e}")
 
-    # Priorité 2 : page HTML
+    # Priorite 2 : page HTML (timeout 10s)
     if not page_text:
         try:
-            headers_html = {
-                'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            req_html = Request(url, headers={
+                'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
                 'Accept-Language':'fr-FR,fr;q=0.9',
-            }
-            req_html = Request(url, headers=headers_html)
-            with urlopen(req_html, timeout=20) as resp_html:
-                raw_html = resp_html.read(200000).decode('utf-8', errors='ignore')
+            })
+            with urlopen(req_html, timeout=10) as resp_html:
+                raw_html = resp_html.read(150000).decode('utf-8', errors='ignore')
             page_text = re.sub(r'<[^>]+>', ' ', raw_html)
-            page_text = re.sub(r'\s+', ' ', page_text).strip()[:8000]
+            page_text = re.sub(r'\s+', ' ', page_text).strip()[:6000]
         except Exception as e:
             log.warning(f"Fetch error {url}: {e}")
             page_text = f"Titre : {title}\nURL : {url}\n(Contenu non accessible)"
 
-    # Call Claude
+    # Call Claude Haiku (timeout 25s)
     try:
         cdc_mention = f"\nCahier des charges : {pdf_url}" if pdf_url else ""
-        source_note = f"\n[Source analysée : {source_used}]"
-        user_content = f"Analyse ce dispositif et remplis la grille.{cdc_mention}\n\nTitre : {title}\nURL : {url}{source_note}\n\nContenu :\n{page_text}"
+        user_content = f"Analyse ce dispositif et remplis la grille.{cdc_mention}\n\nTitre : {title}\nURL : {url}\n[Source : {source_used}]\n\nContenu :\n{page_text}"
         payload = json.dumps({
             "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 2000,
+            "max_tokens": 1500,
             "system": COLLECT_PROMPT,
             "messages": [{"role":"user","content":user_content}]
         }).encode()
@@ -7185,18 +7275,20 @@ def collect_dispositif():
             "x-api-key":ANTHROPIC_API_KEY,
             "anthropic-version":"2023-06-01"
         }, method="POST")
-        with urlopen(req, timeout=40) as resp:
+        with urlopen(req, timeout=25) as resp:
             claude_data = json.loads(resp.read())
         text = claude_data["content"][0]["text"].strip()
         m = re.search(r'\{[\s\S]*\}', text)
         result = json.loads(m.group() if m else text)
         result['source_url'] = url
         result['article_id'] = article_id
-        if pdf_url: result['cdc_url'] = pdf_url  # stocker le CDC dans la fiche
+        if pdf_url:
+            result['cdc_url'] = pdf_url
         return jsonify(result)
     except Exception as e:
         log.error(f"Collect Claude error: {e}")
         return jsonify({'error': str(e)}),500
+
 
 @app.route('/api/dispositifs', methods=['GET'])
 def get_dispositifs():
