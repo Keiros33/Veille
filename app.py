@@ -1854,20 +1854,20 @@ function openDispModal(id) {
   currentDispId = id;
   document.getElementById('modal-title').textContent = '📄 ' + (d.titre || 'Dispositif');
   const fields = [
-    ['Guichet financeur', d.guichet_financeur],
-    ['Guichet instructeur', d.guichet_instructeur],
-    ['Nature', d.nature],
-    ['Bénéficiaires', d.beneficiaire],
-    ['Type de dépôt', d.type_depot],
-    ['Date de clôture', d.date_fermeture],
-    ['Montants & taux', d.montants_taux],
-    ['Territoire', d.territoire],
-    ['Thématiques', d.thematiques],
-    ['Objectif', d.objectif, true],
-    ['Dépenses éligibles', d.depenses_eligibles, true],
-    ['Critères d’éligibilité', d.criteres_eligibilite, true],
-    ['Points de vigilance', d.points_vigilance, true],
-    ['Contact', d.contact],
+    ["Guichet financeur", d.guichet_financeur],
+    ["Guichet instructeur", d.guichet_instructeur],
+    ["Nature", d.nature],
+    ["Bénéficiaires", d.beneficiaire],
+    ["Type de dépôt", d.type_depot],
+    ["Date de clôture", d.date_fermeture],
+    ["Montants & taux", d.montants_taux],
+    ["Territoire", d.territoire],
+    ["Thématiques", d.thematiques],
+    ["Objectif", d.objectif, true],
+    ["Dépenses éligibles", d.depenses_eligibles, true],
+    ["Critères d’éligibilité", d.criteres_eligibilite, true],
+    ["Points de vigilance", d.points_vigilance, true],
+    ["Contact", d.contact],
   ];
   const empty = v => !v || v === 'Information non fournie';
   document.getElementById('modal-body').innerHTML = fields.map(([label, val, full]) => {
@@ -1905,7 +1905,7 @@ async function runV360() {
   if (!project)    { document.getElementById('v360-project').focus(); showToast('Décrivez le projet'); return; }
   const btn = document.getElementById('v360-run-btn');
   btn.disabled = true; btn.textContent = '⏳ Analyse…';
-  status.textContent = 'Interrogation de l\'IA…';
+  status.textContent = 'Interrogation de l’IA…';
   try {
     const resp = await fetch(API + '/api/veille360', {
       method: 'POST',
