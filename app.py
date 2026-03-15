@@ -265,6 +265,13 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_scraped ON articles(scraped_at DESC)",
     ]:
         cur.execute(idx)
+    cur.execute("""CREATE TABLE IF NOT EXISTS veille360_sessions (
+        id SERIAL PRIMARY KEY,
+        client_name TEXT NOT NULL DEFAULT 'Sans nom',
+        project_desc TEXT,
+        result_html TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
     conn.commit(); cur.close(); conn.close()
     log.info("DB ready")
 
@@ -1315,6 +1322,7 @@ body {
     <button class="header-tab active" onclick="switchTab('veille', this)">📰 Veille</button>
     <button class="header-tab" onclick="switchTab('dispositifs', this)">🗄 Dispositifs</button>
     <button class="header-tab" onclick="switchTab('cdc', this)">📋 Cahiers des charges</button>
+    <button class="header-tab" onclick="switchTab('veille360', this)">🔍 Pré-veille 360°</button>
   </nav>
   <div class="header-search">
     <span class="header-search-icon">🔍</span>
@@ -1349,11 +1357,16 @@ body {
 
     <!-- PANEL VEILLE -->
     <div class="panel active" id="panel-veille">
-      <div class="sort-row">
+      <div class="sort-row" style="flex-wrap:wrap;gap:6px;">
         <span class="sort-label">Trier par</span>
         <button class="sort-btn active" onclick="setSort('date', this)">Date</button>
         <button class="sort-btn" onclick="setSort('dispositif', this)">Dispositifs d'abord</button>
         <span class="result-count" id="result-count">— articles</span>
+        <div style="flex:1"></div>
+        <button onclick="collectAllMissing()" id="btn-collect-all"
+          style="padding:5px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--accent);background:var(--accent);color:var(--lime);white-space:nowrap;">
+          📥 Tout collecter les dispositifs
+        </button>
       </div>
       <div class="articles-list" id="articles-list">
         <div class="spinner"></div>
@@ -1386,10 +1399,7 @@ body {
             <option>Pays de la Loire</option><option>PACA</option>
             <option>Bourgogne-FC</option><option>Centre-Val de Loire</option>
           </select>
-          <button onclick="collectAllMissing()" id="btn-collect-all"
-            style="padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--accent);background:var(--accent);color:var(--lime);white-space:nowrap;">
-            📥 Tout collecter
-          </button>
+
         </div>
       </div>
       <div class="disp-grid" id="disp-grid">
@@ -1407,7 +1417,41 @@ body {
       </div>
     </div>
 
+    <!-- PANEL PRÉ-VEILLE 360° -->
+    <div class="panel" id="panel-veille360">
+      <div class="sort-row" style="flex-wrap:wrap;gap:8px;">
+        <span class="result-count" id="v360-sessions-count">— analyses</span>
+        <input id="v360-client-input" placeholder="Nom du client / dossier…"
+          style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text);outline:none;min-width:160px;flex:1;">
+        <button onclick="runV360()" id="v360-run-btn"
+          style="padding:5px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:var(--accent);color:var(--lime);">
+          🔍 Lancer une analyse
+        </button>
+      </div>
+      <div id="v360-form" style="padding:10px 0 4px;display:flex;flex-direction:column;gap:8px;">
+        <textarea id="v360-project" placeholder="Décrivez le projet CAPEX du client : porteur, nature des travaux, localisation, montant estimé, contexte…"
+          style="width:100%;min-height:90px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:12px;resize:vertical;font-family:inherit;box-sizing:border-box;"></textarea>
+        <div id="v360-status-inline" style="font-size:11px;color:var(--muted);min-height:16px;"></div>
+      </div>
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:8px 0 6px;">Historique des analyses</div>
+      <div id="v360-sessions-list" style="display:flex;flex-direction:column;gap:6px;">
+        <div class="spinner"></div>
+      </div>
+    </div>
+
   </main>
+</div>
+
+<!-- MODAL RÉSULTAT 360 -->
+<div id="v360-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:12px;width:92%;max-width:920px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+    <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:12px 12px 0 0;">
+      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--accent);" id="v360-modal-title">Analyse 360°</div>
+      <button onclick="document.getElementById('v360-modal').style.display='none'"
+        style="background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--muted);">✕</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:16px 20px;font-size:12px;line-height:1.6;color:var(--text);" id="v360-modal-body"></div>
+  </div>
 </div>
 
 <!-- MODAL DISPOSITIF -->
@@ -1466,11 +1510,15 @@ function collectFromVeille(e) {
   var pdfUrl = btn.getAttribute('data-pdf') || '';
   btn.disabled = true;
   btn.innerHTML = '<span class="collect-icon">⏳</span> Collecte…';
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 28000);
   fetch(API + '/api/collect', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({url:url, title:title, id:artId, pdf_url:pdfUrl})
+    body: JSON.stringify({url:url, title:title, id:artId, pdf_url:pdfUrl}),
+    signal: ctrl.signal
   }).then(function(r) {
+    clearTimeout(tid);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();
   }).then(function(d) {
@@ -1561,7 +1609,7 @@ function clearAllFilters() {
 // ── LOAD DATA ─────────────────────────────────────────────────────────
 async function loadArticles() {
   try {
-    const res = await fetch(API + '/api/articles?limit=300');
+    const res = await fetch(API + '/api/articles?limit=2000');
     allArticles = await res.json();
     updateStats();
     applyFilters();
@@ -1843,6 +1891,97 @@ function switchTab(tab, btn) {
   if (btn) btn.classList.add('active');
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
+  if (tab === 'veille360') loadV360Sessions();
+}
+
+// ── PRÉ-VEILLE 360° ───────────────────────────────────────────────────
+const PROMPT_360_C = `You are "Recherche 360°", a Senior Consultant in public and private financial engineering specialized exclusively in identifying CAPEX funding for investment projects carried by local authorities or private entities eligible for public investment aid. Your sole mission is to conduct exhaustive strategic pre-screening to verify that all schemes financing tangible assets have been identified. Scope: strictly CAPEX only (real estate, works, construction, rehabilitation, equipment, networks, energy performance, etc.). Apply a strict three-criteria eligibility test: 1) Beneficiary legally compatible. 2) Eligible base explicitly finances tangible CAPEX. 3) Purpose coherent with project nature. Return a structured HTML table with columns: Thématique | Territoire | Financeur | Instructeur | Nom exact du dispositif | Type (subvention/prêt/prime) | Base CAPEX éligible | Pertinence stratégique | Montant/Taux indicatif | Statut | Lien officiel. Color-code rows. Never invent schemes. Conclude with exhaustiveness validation. Language: French. Return only clean HTML, no markdown.`;
+
+async function runV360() {
+  const clientName = document.getElementById('v360-client-input').value.trim();
+  const project    = document.getElementById('v360-project').value.trim();
+  const status     = document.getElementById('v360-status-inline');
+  if (!clientName) { document.getElementById('v360-client-input').focus(); showToast('Indiquez un nom de client / dossier'); return; }
+  if (!project)    { document.getElementById('v360-project').focus(); showToast('Décrivez le projet'); return; }
+  const btn = document.getElementById('v360-run-btn');
+  btn.disabled = true; btn.textContent = '⏳ Analyse…';
+  status.textContent = 'Interrogation de l\'IA…';
+  try {
+    const resp = await fetch(API + '/api/veille360', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        system: PROMPT_360_C,
+        messages: [{role:'user', content: project}]
+      })
+    });
+    const data = await resp.json();
+    const html_result = data.content && data.content.find(b => b.type === 'text')
+      ? data.content.find(b => b.type === 'text').text : (data.error || 'Aucun résultat.');
+    // Sauvegarder en DB
+    await fetch(API + '/api/veille360/sessions', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({client_name: clientName, project_desc: project, result_html: html_result})
+    });
+    status.textContent = '✅ Analyse sauvegardée dans le dossier "' + clientName + '"';
+    document.getElementById('v360-client-input').value = '';
+    document.getElementById('v360-project').value = '';
+    loadV360Sessions();
+    openV360Modal(clientName, html_result);
+  } catch(e) {
+    status.textContent = '❌ Erreur : ' + e.message;
+  }
+  btn.disabled = false; btn.textContent = '🔍 Lancer une analyse';
+}
+
+async function loadV360Sessions() {
+  const list = document.getElementById('v360-sessions-list');
+  const count = document.getElementById('v360-sessions-count');
+  try {
+    const sessions = await fetch(API + '/api/veille360/sessions').then(r => r.json());
+    count.textContent = sessions.length + ' analyse' + (sessions.length > 1 ? 's' : '');
+    if (!sessions.length) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:12px 0;">Aucune analyse — lancez votre première pré-veille 360° ci-dessus.</div>';
+      return;
+    }
+    list.innerHTML = sessions.map(s => {
+      const d = new Date(s.created_at).toLocaleDateString('fr-FR', {day:'numeric', month:'short', year:'numeric'});
+      const desc = (s.project_desc || '').slice(0, 80) + ((s.project_desc||'').length > 80 ? '…' : '');
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="openV360Session(${s.id})">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:12px;color:var(--accent);">${s.client_name}</div>
+          <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${desc || '—'}</div>
+        </div>
+        <div style="font-size:10px;color:var(--muted2);white-space:nowrap;">${d}</div>
+        <button onclick="event.stopPropagation();deleteV360Session(${s.id})" title="Supprimer"
+          style="background:none;border:1px solid rgba(200,57,43,.2);color:#c8392b;border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:11px;flex-shrink:0;">✕</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--muted);">Erreur chargement</div>';
+  }
+}
+
+async function openV360Session(id) {
+  try {
+    const s = await fetch(API + '/api/veille360/sessions/' + id).then(r => r.json());
+    openV360Modal(s.client_name, s.result_html);
+  } catch(e) { showToast('Erreur chargement'); }
+}
+
+function openV360Modal(clientName, htmlContent) {
+  document.getElementById('v360-modal-title').textContent = '🔍 Analyse 360° — ' + clientName;
+  document.getElementById('v360-modal-body').innerHTML = htmlContent;
+  document.getElementById('v360-modal').style.display = 'flex';
+}
+
+async function deleteV360Session(id) {
+  if (!confirm('Supprimer cette analyse ?')) return;
+  await fetch(API + '/api/veille360/sessions/' + id, {method: 'DELETE'});
+  loadV360Sessions();
 }
 
 function setSort(mode, btn) {
@@ -6898,6 +7037,41 @@ def api_veille360():
 
 
 # ── Folder management ─────────────────────────────────────────────────────────
+@app.route('/api/veille360/sessions', methods=['GET'])
+def get_veille360_sessions():
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT id, client_name, project_desc, created_at FROM veille360_sessions ORDER BY created_at DESC")
+    rows = cur.fetchall(); cur.close(); conn.close()
+    return jsonify([{**dict(r), 'created_at': r['created_at'].isoformat()} for r in rows])
+
+@app.route('/api/veille360/sessions', methods=['POST'])
+def save_veille360_session():
+    data = request.get_json()
+    conn = get_db(); cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO veille360_sessions (client_name, project_desc, result_html) VALUES (%s, %s, %s) RETURNING id",
+        (data.get('client_name', 'Sans nom'), data.get('project_desc', ''), data.get('result_html', ''))
+    )
+    new_id = cur.fetchone()['id']
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'id': new_id, 'status': 'saved'})
+
+@app.route('/api/veille360/sessions/<int:sid>', methods=['GET'])
+def get_veille360_session(sid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT * FROM veille360_sessions WHERE id=%s", (sid,))
+    row = cur.fetchone(); cur.close(); conn.close()
+    if not row: return jsonify({'error': 'not found'}), 404
+    d = dict(row); d['created_at'] = d['created_at'].isoformat()
+    return jsonify(d)
+
+@app.route('/api/veille360/sessions/<int:sid>', methods=['DELETE'])
+def delete_veille360_session(sid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("DELETE FROM veille360_sessions WHERE id=%s", (sid,))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'status': 'deleted'})
+
 @app.route('/api/folders', methods=['GET'])
 def api_get_folders():
     conn=get_db(); cur=conn.cursor()
