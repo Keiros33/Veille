@@ -1337,6 +1337,44 @@ body {
 /* ── DISPOSITIF CARDS ─────────────────────────────────────────────── */
 .disp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 
+/* Contrôles dispositifs */
+.disp-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.disp-view-toggle { display:flex; gap:4px; background:var(--surface2); border-radius:8px; padding:3px; border:1px solid var(--border); flex-shrink:0; }
+.dv-btn { padding:5px 14px; border-radius:6px; font-size:11px; font-weight:700; border:none; background:none; color:var(--muted); cursor:pointer; transition:all .15s; white-space:nowrap; }
+.dv-btn.active { background:var(--surface); color:var(--accent); box-shadow:0 1px 4px rgba(0,0,0,.08); }
+.disp-search-input { padding:5px 10px; border:1px solid var(--border); border-radius:6px; font-size:11px; background:var(--surface2); color:var(--text); outline:none; min-width:160px; flex:1; }
+.disp-filter-sel { padding:5px 9px; border:1px solid var(--border); border-radius:6px; font-size:11px; background:var(--surface2); color:var(--text); outline:none; cursor:pointer; }
+
+/* Table base de données */
+.disp-table { width:100%; border-collapse:collapse; font-size:12px; min-width:1400px; }
+.disp-table thead { position:sticky; top:0; z-index:10; }
+.disp-table th {
+  background:var(--accent); color:var(--lime);
+  padding:9px 12px; text-align:left;
+  font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  white-space:nowrap; border-right:1px solid rgba(255,255,255,.1);
+  user-select:none;
+}
+.dt-sort { cursor:pointer; }
+.dt-sort:hover { background:rgba(255,255,255,.1); }
+.disp-table td {
+  padding:9px 12px; border-bottom:1px solid var(--border);
+  vertical-align:top; color:var(--text); max-width:200px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.disp-table td.wrap { white-space:normal; line-height:1.5; }
+.disp-table tr:hover td { background:rgba(26,60,46,.03); }
+.disp-table tr:nth-child(even) td { background:rgba(0,0,0,.015); }
+.disp-table tr:nth-child(even):hover td { background:rgba(26,60,46,.03); }
+.dt-empty { color:var(--muted); font-style:italic; }
+.dt-badge { display:inline-block; padding:2px 8px; border-radius:100px; font-size:10px; font-weight:700; }
+.dt-badge-depot-eau  { background:rgba(62,207,122,.12); color:#1a7a40; }
+.dt-badge-depot-date { background:rgba(245,200,66,.12); color:#8a6000; }
+.dt-badge-depot-clos { background:rgba(240,91,91,.1); color:#c03030; }
+.dt-badge-depot-att  { background:rgba(167,139,250,.12); color:#5030a0; }
+.dt-export-btn { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:6px; font-size:10px; font-weight:700; cursor:pointer; border:1.5px solid var(--accent); background:none; color:var(--accent); white-space:nowrap; transition:all .15s; }
+.dt-export-btn:hover { background:var(--accent); color:var(--lime); }
+
 /* Sous-menu collect */
 .collect-submenu-item {
   width: 100%; display: flex; align-items: center; gap: 12px;
@@ -1587,35 +1625,73 @@ body {
 
     <!-- PANEL DISPOSITIFS -->
     <div class="panel" id="panel-dispositifs">
-      <div class="sort-row" style="gap:8px;flex-wrap:wrap;">
-        <span class="result-count" id="disp-count">— dispositifs</span>
-        <div style="display:flex;gap:6px;align-items:center;flex:1;flex-wrap:wrap;">
-          <input id="disp-search" placeholder="Rechercher…" oninput="filterDispositifs()"
-            style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text);outline:none;min-width:140px;flex:1;">
-          <select id="disp-filter-benef" onchange="filterDispositifs()"
-            style="padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text);outline:none;cursor:pointer;">
-            <option value="">Tous bénéficiaires</option>
-            <option>Collectivité</option><option>Entreprise</option><option>PME</option>
-            <option>TPE</option><option>ETI</option><option>Association</option>
-            <option>Start-up</option><option>ESS/Insertion</option>
-            <option>Particulier</option><option>Agriculteur</option>
-          </select>
-          <select id="disp-filter-territoire" onchange="filterDispositifs()"
-            style="padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text);outline:none;cursor:pointer;">
-            <option value="">Tous territoires</option>
-            <option>National</option><option>Europe</option>
-            <option>Nouvelle-Aquitaine</option><option>Occitanie</option>
-            <option>Auvergne-Rhône-Alpes</option><option>Bretagne</option>
-            <option>Normandie</option><option>Hauts-de-France</option>
-            <option>Île-de-France</option><option>Grand Est</option>
-            <option>Pays de la Loire</option><option>PACA</option>
-            <option>Bourgogne-FC</option><option>Centre-Val de Loire</option>
-          </select>
-
+      <!-- Barre de contrôles -->
+      <div class="disp-controls">
+        <div class="disp-view-toggle">
+          <button class="dv-btn active" id="dv-cards" onclick="setDispView('cards', this)">🗂 Bibliothèque</button>
+          <button class="dv-btn"        id="dv-table" onclick="setDispView('table', this)">📊 Base de données</button>
         </div>
+        <input id="disp-search" placeholder="Rechercher…" oninput="filterDispositifs()" class="disp-search-input">
+        <select id="disp-filter-benef" onchange="filterDispositifs()" class="disp-filter-sel">
+          <option value="">Tous bénéficiaires</option>
+          <option>Collectivité</option><option>Entreprise</option><option>PME</option>
+          <option>TPE</option><option>ETI</option><option>Association</option>
+          <option>Start-up</option><option>ESS/Insertion</option>
+          <option>Particulier</option><option>Agriculteur</option>
+        </select>
+        <select id="disp-filter-territoire" onchange="filterDispositifs()" class="disp-filter-sel">
+          <option value="">Tous territoires</option>
+          <option>National</option><option>Europe</option>
+          <option>Nouvelle-Aquitaine</option><option>Occitanie</option>
+          <option>Auvergne-Rhône-Alpes</option><option>Bretagne</option>
+          <option>Normandie</option><option>Hauts-de-France</option>
+          <option>Île-de-France</option><option>Grand Est</option>
+          <option>Pays de la Loire</option><option>PACA</option>
+          <option>Bourgogne-FC</option><option>Centre-Val de Loire</option>
+        </select>
+        <select id="disp-filter-nature" onchange="filterDispositifs()" class="disp-filter-sel">
+          <option value="">Toutes natures</option>
+          <option>Subvention</option><option>Prêt</option>
+          <option>Avance remboursable</option><option>Garantie</option>
+          <option>Crédit d'impôt</option><option>Exonération fiscale</option>
+          <option>Investissement en fonds propres</option>
+        </select>
+        <select id="disp-filter-depot" onchange="filterDispositifs()" class="disp-filter-sel">
+          <option value="">Tous dépôts</option>
+          <option>Au fil de l'eau</option><option>Date</option>
+          <option>Clôturé</option><option>En attente de renouvellement</option>
+        </select>
+        <span class="result-count" id="disp-count" style="margin-left:auto;">— dispositifs</span>
       </div>
+      <!-- Vue cartes (bibliothèque) -->
       <div class="disp-grid" id="disp-grid">
         <div class="spinner"></div>
+      </div>
+      <!-- Vue tableau (base de données) -->
+      <div id="disp-table-wrap" style="display:none;overflow-x:auto;">
+        <table class="disp-table" id="disp-table">
+          <thead>
+            <tr>
+              <th onclick="sortDispTable('titre')" class="dt-sort">Titre ↕</th>
+              <th onclick="sortDispTable('guichet_financeur')" class="dt-sort">Financeur ↕</th>
+              <th onclick="sortDispTable('nature')" class="dt-sort">Nature ↕</th>
+              <th onclick="sortDispTable('beneficiaire')" class="dt-sort">Bénéficiaire ↕</th>
+              <th onclick="sortDispTable('territoire')" class="dt-sort">Territoire ↕</th>
+              <th onclick="sortDispTable('type_depot')" class="dt-sort">Dépôt ↕</th>
+              <th onclick="sortDispTable('date_fermeture')" class="dt-sort">Clôture ↕</th>
+              <th>Montants</th>
+              <th>Objectif</th>
+              <th>Dépenses éligibles</th>
+              <th>Critères</th>
+              <th>Points vigilance</th>
+              <th onclick="sortDispTable('guichet_instructeur')" class="dt-sort">Instructeur ↕</th>
+              <th>Programme EU</th>
+              <th>Contact</th>
+              <th style="width:80px;text-align:center;">Export</th>
+            </tr>
+          </thead>
+          <tbody id="disp-table-body"></tbody>
+        </table>
       </div>
     </div>
 
@@ -2314,16 +2390,101 @@ function renderDispositifs(list) {
 }
 
 // ── FILTER DISPOSITIFS ───────────────────────────────────────────────
-function filterDispositifs() {
-  const q      = (document.getElementById('disp-search')?.value || '').toLowerCase();
-  const benef  = (document.getElementById('disp-filter-benef')?.value || '').toLowerCase();
-  const terr   = (document.getElementById('disp-filter-territoire')?.value || '').toLowerCase();
-  let list = allDispositifs;
-  if (q)     list = list.filter(d => (d.titre||'').toLowerCase().includes(q) || (d.guichet_financeur||'').toLowerCase().includes(q));
-  if (benef) list = list.filter(d => (d.beneficiaire||'').toLowerCase().includes(benef));
-  if (terr)  list = list.filter(d => (d.territoire||'').toLowerCase().includes(terr));
-  renderDispositifs(list);
+// ── VUE DISPOSITIFS ───────────────────────────────────────────────────
+var dispView = 'cards';
+var dispSortCol = '';
+var dispSortDir = 1;
+
+function setDispView(mode, btn) {
+  dispView = mode;
+  document.querySelectorAll('.dv-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  document.getElementById('disp-grid').style.display      = mode === 'cards' ? '' : 'none';
+  document.getElementById('disp-table-wrap').style.display = mode === 'table' ? '' : 'none';
+  filterDispositifs();
 }
+
+function sortDispTable(col) {
+  if (dispSortCol === col) dispSortDir *= -1;
+  else { dispSortCol = col; dispSortDir = 1; }
+  filterDispositifs();
+}
+
+function filterDispositifs() {
+  var q      = (document.getElementById('disp-search').value || '').toLowerCase();
+  var benef  = document.getElementById('disp-filter-benef').value;
+  var terr   = document.getElementById('disp-filter-territoire').value;
+  var nature = (document.getElementById('disp-filter-nature') || {}).value || '';
+  var depot  = (document.getElementById('disp-filter-depot') || {}).value || '';
+
+  var list = allDispositifs.filter(function(d) {
+    if (q && !(
+      (d.titre||'').toLowerCase().includes(q) ||
+      (d.guichet_financeur||'').toLowerCase().includes(q) ||
+      (d.objectif||'').toLowerCase().includes(q) ||
+      (d.beneficiaire||'').toLowerCase().includes(q)
+    )) return false;
+    if (benef  && !(d.beneficiaire||'').toLowerCase().includes(benef.toLowerCase())) return false;
+    if (terr   && !(d.territoire||'').toLowerCase().includes(terr.toLowerCase())) return false;
+    if (nature && !(d.nature||'').toLowerCase().includes(nature.toLowerCase())) return false;
+    if (depot  && !(d.type_depot||'').toLowerCase().includes(depot.toLowerCase())) return false;
+    return true;
+  });
+
+  if (dispSortCol) {
+    list = list.slice().sort(function(a, b) {
+      var va = (a[dispSortCol] || '').toLowerCase();
+      var vb = (b[dispSortCol] || '').toLowerCase();
+      return va < vb ? -dispSortDir : va > vb ? dispSortDir : 0;
+    });
+  }
+
+  document.getElementById('disp-count').textContent = list.length + ' dispositif' + (list.length > 1 ? 's' : '');
+  renderDispositifs(list);
+  if (dispView === 'table') renderDispTable(list);
+}
+
+function renderDispTable(list) {
+  var tbody = document.getElementById('disp-table-body');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;padding:32px;color:var(--muted);">Aucun dispositif</td></tr>';
+    return;
+  }
+  function cell(v) { return v && v !== 'Information non fournie' ? v : '<span class="dt-empty">—</span>'; }
+  function depotBadge(v) {
+    var cls = 'dt-badge ';
+    if (!v || v === 'Information non fournie') return '<span class="dt-empty">—</span>';
+    var vl = v.toLowerCase();
+    if (vl.includes('fil') || vl.includes('continu')) cls += 'dt-badge-depot-eau';
+    else if (vl.includes('clôtur') || vl.includes('clotur')) cls += 'dt-badge-depot-clos';
+    else if (vl.includes('attente') || vl.includes('renouvell')) cls += 'dt-badge-depot-att';
+    else cls += 'dt-badge-depot-date';
+    return '<span class="' + cls + '">' + v + '</span>';
+  }
+  tbody.innerHTML = list.map(function(d) {
+    return '<tr>' +
+      '<td title="' + (d.titre||'') + '" style="font-weight:700;max-width:200px;">' + cell(d.titre) + '</td>' +
+      '<td>' + cell(d.guichet_financeur) + '</td>' +
+      '<td>' + cell(d.nature) + '</td>' +
+      '<td>' + cell(d.beneficiaire) + '</td>' +
+      '<td>' + cell(d.territoire) + '</td>' +
+      '<td>' + depotBadge(d.type_depot) + '</td>' +
+      '<td>' + cell(d.date_fermeture) + '</td>' +
+      '<td class="wrap" style="max-width:180px;white-space:normal;">' + cell(d.montants_taux) + '</td>' +
+      '<td class="wrap" style="max-width:180px;white-space:normal;">' + cell(d.objectif) + '</td>' +
+      '<td class="wrap" style="max-width:180px;white-space:normal;">' + cell(d.depenses_eligibles) + '</td>' +
+      '<td class="wrap" style="max-width:180px;white-space:normal;">' + cell(d.criteres_eligibilite) + '</td>' +
+      '<td class="wrap" style="max-width:160px;white-space:normal;">' + cell(d.points_vigilance) + '</td>' +
+      '<td>' + cell(d.guichet_instructeur) + '</td>' +
+      '<td>' + cell(d.programme_europeen) + '</td>' +
+      '<td>' + cell(d.contact) + '</td>' +
+      '<td style="text-align:center;white-space:nowrap;">' +
+        '<button class="dt-export-btn" onclick="window.open(API+'/api/dispositifs/'+' + (d.id||0) + '+'/export-pptx','_blank')">📊 PPTX</button>' +
+      '</td>' +
+      '</tr>';
+  }).join('');
+}
+
 
 // ── COLLECT ALL MISSING ───────────────────────────────────────────────
 function toggleCollectMenu() {
