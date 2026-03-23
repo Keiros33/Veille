@@ -1788,57 +1788,23 @@ function renderArticles(list) {
 }
 
 function renderArticleCards(list, showCollect) {
-  return list.map((a, i) => {
+  return list.map((a, idx) => {
     const tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
     const isDisp = tags.includes('⭐ Dispositif');
     const hasCDC = !!a.pdf_url;
-    const date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR', {day:'numeric', month:'short'}) : '';
-    const subTags = tags.filter(t => !t.startsWith('⭐')).slice(0, 4);
-    const safeUrl   = (a.url    || '').replace(/"/g, '&quot;');
-    const safeTitle = (a.title  || '').replace(/"/g, '&quot;');
-    const safePdf   = (a.pdf_url|| '').replace(/"/g, '&quot;');
-
-    // Badge type
-    const typeBadge = isDisp
-      ? '<span class="article-tag ref">⭐ Dispositif</span>'
-      : '<span class="article-tag">⭐ Actualité</span>';
-
-    // Tags secondaires (max 4)
-    const tagsHtml = subTags.map(t => '<span class="article-tag">' + t + '</span>').join('');
-
-    // CDC badge — prominent si présent, grisé sinon
-    const cdcBadge = hasCDC
-      ? `<a class="cdc-badge" href="${safePdf}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Ouvrir le cahier des charges">📋 CDC disponible</a>`
-      : '<span class="cdc-badge-missing">📋 Pas de CDC</span>';
-
-    // Bouton Collecter
-    const collectBtn = showCollect
-      ? `<button class="btn-collect${hasCDC ? ' with-cdc' : ''}" data-url="${safeUrl}" data-title="${safeTitle}" data-id="${a.id || 0}" data-pdf="${safePdf}" onclick="collectFromVeille(event)" title="${hasCDC ? 'Collecter via le CDC' : 'Collecter via la page web'}">
-          <span class="collect-icon">${hasCDC ? '📋' : '💾'}</span> ${hasCDC ? 'Collecter (CDC)' : 'Collecter'}
-         </button>`
-      : '';
-
-    const cardClass = 'article-card' + (isDisp ? ' is-dispositif' : '') + (hasCDC ? ' has-cdc' : '');
-
-    return `<a class="${cardClass}" href="${a.url}" target="_blank" rel="noopener" style="animation-delay:${Math.min(i * 0.03, 0.4)}s">
-      <div class="article-card-top">
-        <div>
-          <div class="article-card-source">${a.source || ''}</div>
-          <div class="article-card-date">${date}</div>
-        </div>
-        <div class="article-card-title">${a.title}</div>
-      </div>
-      ${a.summary ? '<div class="article-card-summary">' + a.summary + '</div>' : ''}
-      <div class="card-footer">
-        <div class="card-footer-tags">
-          ${typeBadge}${tagsHtml}
-        </div>
-        <div class="card-footer-actions">
-          ${cdcBadge}
-          ${collectBtn ? `<span onclick="event.preventDefault()">${collectBtn}</span>` : ''}
-        </div>
-      </div>
-    </a>`;
+    const date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR', {day:'numeric',month:'short'}) : '';
+    const subTags = tags.filter(t => !t.startsWith('⭐')).slice(0,4);
+    const safeUrl   = (a.url||'').replace(/"/g,'&quot;');
+    const safeTitle = (a.title||'').replace(/"/g,'&quot;');
+    const safePdf   = (a.pdf_url||'').replace(/"/g,'&quot;');
+    const typeBadge = isDisp ? '<span class="article-tag ref">⭐ Dispositif</span>' : '<span class="article-tag">⭐ Actualité</span>';
+    const tagsHtml  = subTags.map(t => '<span class="article-tag">'+t+'</span>').join('');
+    const cdcBadge  = hasCDC ? '<a class="cdc-badge" href="'+safePdf+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">📋 CDC</a>' : '<span class="cdc-badge-missing">📋 Pas de CDC</span>';
+    const collectBtn = showCollect ? '<button class="btn-collect'+(hasCDC?' with-cdc':'')+'" data-url="'+safeUrl+'" data-title="'+safeTitle+'" data-id="'+(a.id||0)+'" data-pdf="'+safePdf+'" onclick="collectFromVeille(event)"><span class="collect-icon">'+(hasCDC?'📋':'💾')+'</span> Collecter</button>' : '';
+    const cardClass = 'article-card'+(isDisp?' is-dispositif':'')+(hasCDC?' has-cdc':'');
+    const summary   = a.summary ? '<div class="article-card-summary">'+a.summary+'</div>' : '';
+    const footer    = '<div class="card-footer"><div class="card-footer-tags">'+typeBadge+tagsHtml+'</div><div class="card-footer-actions">'+cdcBadge+(collectBtn?'<span onclick="event.preventDefault()">'+collectBtn+'</span>':'')+'</div></div>';
+    return '<a class="'+cardClass+'" href="'+a.url+'" target="_blank" rel="noopener" style="animation-delay:'+Math.min(idx*0.03,0.4)+'s"><div class="article-card-top"><div><div class="article-card-source">'+(a.source||'')+'</div><div class="article-card-date">'+date+'</div></div><div class="article-card-title">'+a.title+'</div></div>'+summary+footer+'</a>';
   }).join('');
 }
 
