@@ -7900,6 +7900,18 @@ def _run_autotag(article_ids, delete_irrelevant):
             url     = row['url'] or ''
             pdf_url = row.get('pdf_url') or ''
 
+            # ── Détection CDC en même temps que le tagging ────────────────
+            # Si pas de CDC connu → visiter la page pour en chercher un
+            if not pdf_url and url:
+                try:
+                    found_pdf = _scrape_pdf_url(url)
+                    if found_pdf:
+                        pdf_url = found_pdf
+                        cur.execute("UPDATE articles SET pdf_url=%s WHERE id=%s", (pdf_url, art_id))
+                        conn.commit()
+                except Exception:
+                    pass  # Timeout ou erreur réseau — on continue sans CDC
+
             if has_strong_signal(title, pdf_url):
                 # ── Appel Claude (Haiku = le moins cher) ──────────────────────
                 context = f"Titre : {title}\nRésumé : {summary[:300]}\nURL : {url}"
