@@ -8136,7 +8136,7 @@ CDC_DOC_KEYWORDS = [
     'appel_a_projets', 'notice', 'dossier', 'formulaire', 'guide', 'annexe',
     'modalites', 'candidature', 'depot', 'programme', 'cdc', 'specifications'
 ]
-CDC_DOC_EXTENSIONS = ('.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg')
+CDC_DOC_EXTENSIONS = ('.pdf', '.doc', '.docx', '.odt', '.xls', '.xlsx')
 
 def _make_absolute(href, page_url):
     """Convert relative href to absolute URL."""
@@ -8181,10 +8181,13 @@ def _scrape_pdf_url(page_url):
                 candidates_url_kw.append(abs_href)
             elif has_ext:
                 candidates_url_ext.append(abs_href)
-            elif has_kw_txt:
+            elif has_kw_txt and has_ext:
+                # Texte CDC + extension document = candidat valide
                 candidates_txt_kw.append(abs_href)
+            # Sinon : lien HTML avec texte CDC = ignoré (trop de bruit)
 
         # Retourne le meilleur candidat par priorité
+        # Seuls les liens avec vraie extension document sont retenus
         for pool in [candidates_url_kw, candidates_url_ext, candidates_txt_kw]:
             if pool:
                 return pool[0]
