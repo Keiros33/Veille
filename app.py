@@ -604,14 +604,15 @@ GRILLE À REMPLIR (19 champs obligatoires) :
 RÈGLES STRICTES :
 - Toute information absente = "Information non fournie"
 - Aucune déduction ni hypothèse
-- LONGUEURS MAXIMALES STRICTES (pour le rendu PowerPoint) :
-  * objectif : 200 caractères max
-  * operations_eligibles : 300 caractères max
-  * depenses_eligibles : 300 caractères max
-  * criteres_eligibilite : 400 caractères max
-  * montants_taux : 250 caractères max
-  * points_vigilance : 250 caractères max
-  * Si le contenu dépasse la limite, résume en gardant l'essentiel
+- LONGUEURS MAXIMALES STRICTES (rendu PowerPoint — ne jamais dépasser) :
+  * objectif : 180 caractères max — 1 phrase synthétique
+  * operations_eligibles : 250 caractères max — liste concise
+  * depenses_eligibles : 250 caractères max — liste concise
+  * criteres_eligibilite : 350 caractères max — conditions clés uniquement
+  * montants_taux : 220 caractères max — montant + taux en une ligne si possible
+  * points_vigilance : 220 caractères max — 2-3 points MAX, séparés par " | "
+  * Si le contenu dépasse : résume brutalement, supprime les détails secondaires
+  * Pour les listes : utiliser " | " comme séparateur, PAS de tirets ni de puces
 - Réponse UNIQUEMENT en JSON valide avec ces clés exactes :
 guichet_financeur, guichet_instructeur, titre, nature, beneficiaire, type_depot,
 date_fermeture, objectif, types_depenses, operations_eligibles, depenses_eligibles,
@@ -639,11 +640,10 @@ def generate_dispositif_pptx(data):
 
     # ── Titre : toujours 24pt, réduction jusqu'à 14pt si trop long ──────────
     def titre_font_size(t):
-        # Titre fixé à 20pt comme demandé, réduction si très long
         n = len(t)
-        if n <= 60:  return Pt(20)
-        if n <= 80:  return Pt(17)
-        return Pt(14)
+        if n <= 60:  return Pt(24)
+        if n <= 80:  return Pt(20)
+        return Pt(17)
 
     # ── Logo fetch : Google Favicons (sz=128) ────────────────────────────────
     KNOWN_DOMAINS = {
@@ -844,10 +844,14 @@ def generate_dispositif_pptx(data):
             set_second_para(shape, safe(data.get('beneficiaire')))
 
         elif sid == 15:
-            set_second_para(shape, safe(data.get('montants_taux'))[:250])
+            shape.height = int(1.65 * 914400)   # était 1.52" — un peu plus haut
+            set_second_para(shape, safe(data.get('montants_taux'))[:280])
 
         elif sid == 16:
-            set_second_para(shape, safe(data.get('points_vigilance'))[:250])
+            # Descendre légèrement + agrandir la zone points de vigilance
+            shape.top    = int(4.40 * 914400)   # était 4.245"
+            shape.height = int(2.10 * 914400)   # était 1.99"
+            set_second_para(shape, safe(data.get('points_vigilance'))[:280])
 
         elif sid == 5:
             # Logo zone slide 2
@@ -2479,7 +2483,7 @@ function renderDispTable(list) {
       '<td>' + cell(d.programme_europeen) + '</td>' +
       '<td>' + cell(d.contact) + '</td>' +
       '<td style="text-align:center;white-space:nowrap;">' +
-        '<button class="dt-export-btn" onclick="window.open(API+'/api/dispositifs/'+' + (d.id||0) + '+'/export-pptx','_blank')">📊 PPTX</button>' +
+        '<button class="dt-export-btn" onclick="openDispPptx(' + (d.id||0) + ')">📊 PPTX</button>' +
       '</td>' +
       '</tr>';
   }).join('');
@@ -2616,6 +2620,10 @@ function openDispModal(id) {
   document.getElementById('modal').classList.add('open');
 }
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
+function openDispPptx(id) {
+  window.open(API + '/api/dispositifs/' + id + '/export-pptx', '_blank');
+}
+
 function exportDispPptx() {
   if (currentDispId) window.open(API + '/api/dispositifs/' + currentDispId + '/export-pptx', '_blank');
 }
