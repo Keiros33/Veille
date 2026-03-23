@@ -1118,6 +1118,42 @@ body {
 .article-card:hover { box-shadow: var(--shadow); border-color: #d0cfc7; transform: translateY(-1px); }
 .article-card:hover::before { background: var(--lime); }
 .article-card.is-dispositif::before { background: var(--lime); }
+.article-card.has-cdc { border-color: rgba(168,200,48,0.5); }
+.article-card.has-cdc::before { background: var(--lime); }
+
+/* CDC Badge sur la carte */
+.cdc-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 6px;
+  font-size: 10px; font-weight: 700;
+  background: rgba(168,200,48,0.18);
+  color: #4a6800;
+  border: 1px solid rgba(168,200,48,0.4);
+  text-decoration: none;
+}
+.cdc-badge:hover { background: rgba(168,200,48,0.32); }
+.cdc-badge-missing {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 6px;
+  font-size: 10px; font-weight: 600;
+  background: var(--surface2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+/* Footer carte unifié : tags + CDC + bouton collecter */
+.card-footer {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.card-footer-tags { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; min-width: 0; }
+.card-footer-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+
+/* Sort toggle button */
+.sort-btn.filter-toggle { background: var(--surface2); }
+.sort-btn.filter-toggle.on { background: rgba(168,200,48,0.2); color: #4a6800; border-color: rgba(168,200,48,0.5); font-weight: 700; }
 
 .article-card-top {
   display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px;
@@ -1361,6 +1397,11 @@ body {
         <span class="sort-label">Trier par</span>
         <button class="sort-btn active" onclick="setSort('date', this)">Date</button>
         <button class="sort-btn" onclick="setSort('dispositif', this)">Dispositifs d'abord</button>
+        <button class="sort-btn" id="sort-cdc-btn" onclick="setSort('cdc', this)" title="CDC en premier">📋 CDC en 1er</button>
+        <button class="sort-btn filter-toggle" id="btn-cdc-only" onclick="toggleCDCOnly()"
+          title="Afficher uniquement les dispositifs avec cahier des charges">
+          📋 Avec CDC uniquement
+        </button>
         <span class="result-count" id="result-count">— articles</span>
         <div style="flex:1"></div>
         <button onclick="collectAllMissing()" id="btn-collect-all"
@@ -1638,6 +1679,15 @@ function updateStats() {
 }
 
 // ── FILTERING ─────────────────────────────────────────────────────────
+// Filtre CDC only
+let cdcOnly = false;
+function toggleCDCOnly() {
+  cdcOnly = !cdcOnly;
+  const btn = document.getElementById('btn-cdc-only');
+  if (btn) btn.classList.toggle('on', cdcOnly);
+  applyFilters();
+}
+
 function applyFilters() {
   let filtered = allArticles;
 
@@ -1656,19 +1706,33 @@ function applyFilters() {
     const active = filterState[g.key].active;
     if (!active.size) return;
     filtered = filtered.filter(a => {
-      const tags = Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]');
+      const tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
       return [...active].some(t => tags.includes(t));
     });
   });
 
+  // Filtre CDC uniquement
+  if (cdcOnly) {
+    filtered = filtered.filter(a => !!a.pdf_url);
+  }
+
   // Sort
   if (sortMode === 'date') {
-    filtered.sort((a,b) => new Date(b.scraped_at) - new Date(a.scraped_at));
+    filtered.sort((a, b) => new Date(b.scraped_at) - new Date(a.scraped_at));
+  } else if (sortMode === 'cdc') {
+    // CDC en premier : articles avec pdf_url d'abord, puis par date
+    filtered.sort((a, b) => {
+      if (a.pdf_url && !b.pdf_url) return -1;
+      if (!a.pdf_url && b.pdf_url) return 1;
+      return new Date(b.scraped_at) - new Date(a.scraped_at);
+    });
   } else {
-    filtered.sort((a,b) => {
-      const ad = (Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]')).includes('⭐ Dispositif');
-      const bd = (Array.isArray(b.tags)?b.tags:JSON.parse(b.tags||'[]')).includes('⭐ Dispositif');
-      if (ad && !bd) return -1; if (!ad && bd) return 1;
+    // Dispositifs d'abord
+    filtered.sort((a, b) => {
+      const ad = (Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags||'[]')).includes('⭐ Dispositif');
+      const bd = (Array.isArray(b.tags) ? b.tags : JSON.parse(b.tags||'[]')).includes('⭐ Dispositif');
+      if (ad && !bd) return -1;
+      if (!ad && bd) return 1;
       return new Date(b.scraped_at) - new Date(a.scraped_at);
     });
   }
@@ -1701,27 +1765,55 @@ function renderArticles(list) {
 
 function renderArticleCards(list, showCollect) {
   return list.map((a, i) => {
-    const tags = Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]');
-    const isDisp = tags.indexOf('⭐ Dispositif')>=0;
-    const date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}) : '';
-    const subTags = tags.filter(t => !t.startsWith('⭐'));
-    const typeBadge = isDisp ? '<span class="article-tag ref">⭐ Dispositif</span>' : '<span class="article-tag">⭐ Actualité</span>';
-    const tagsHtml = subTags.map(t=>'<span class="article-tag">'+t+'</span>').join('');
-    const cdcInfo = a.pdf_url ? `<a class="cdc-inline-link" href="${a.pdf_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">📋 CDC</a>` : '';
-    const safeUrl = (a.url||'').replace(/"/g,'&quot;');
-    const safeTitle = (a.title||'').replace(/"/g,'&quot;');
-    const safePdf = (a.pdf_url||'').replace(/"/g,'&quot;');
+    const tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+    const isDisp = tags.includes('⭐ Dispositif');
+    const hasCDC = !!a.pdf_url;
+    const date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR', {day:'numeric', month:'short'}) : '';
+    const subTags = tags.filter(t => !t.startsWith('⭐')).slice(0, 4);
+    const safeUrl   = (a.url    || '').replace(/"/g, '&quot;');
+    const safeTitle = (a.title  || '').replace(/"/g, '&quot;');
+    const safePdf   = (a.pdf_url|| '').replace(/"/g, '&quot;');
+
+    // Badge type
+    const typeBadge = isDisp
+      ? '<span class="article-tag ref">⭐ Dispositif</span>'
+      : '<span class="article-tag">⭐ Actualité</span>';
+
+    // Tags secondaires (max 4)
+    const tagsHtml = subTags.map(t => '<span class="article-tag">' + t + '</span>').join('');
+
+    // CDC badge — prominent si présent, grisé sinon
+    const cdcBadge = hasCDC
+      ? `<a class="cdc-badge" href="${safePdf}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Ouvrir le cahier des charges">📋 CDC disponible</a>`
+      : '<span class="cdc-badge-missing">📋 Pas de CDC</span>';
+
+    // Bouton Collecter
     const collectBtn = showCollect
-      ? `<button class="btn-collect" data-url="${safeUrl}" data-title="${safeTitle}" data-id="${a.id||0}" data-pdf="${safePdf}" onclick="collectFromVeille(event)"><span class="collect-icon">💾</span> Collecter</button>`
+      ? `<button class="btn-collect${hasCDC ? ' with-cdc' : ''}" data-url="${safeUrl}" data-title="${safeTitle}" data-id="${a.id || 0}" data-pdf="${safePdf}" onclick="collectFromVeille(event)" title="${hasCDC ? 'Collecter via le CDC' : 'Collecter via la page web'}">
+          <span class="collect-icon">${hasCDC ? '📋' : '💾'}</span> ${hasCDC ? 'Collecter (CDC)' : 'Collecter'}
+         </button>`
       : '';
-    return `<a class="article-card${isDisp?' is-dispositif':''}" href="${a.url}" target="_blank" rel="noopener" style="animation-delay:${Math.min(i*0.03,0.4)}s">
+
+    const cardClass = 'article-card' + (isDisp ? ' is-dispositif' : '') + (hasCDC ? ' has-cdc' : '');
+
+    return `<a class="${cardClass}" href="${a.url}" target="_blank" rel="noopener" style="animation-delay:${Math.min(i * 0.03, 0.4)}s">
       <div class="article-card-top">
-        <div><div class="article-card-source">${a.source||''}</div><div class="article-card-date">${date}</div></div>
+        <div>
+          <div class="article-card-source">${a.source || ''}</div>
+          <div class="article-card-date">${date}</div>
+        </div>
         <div class="article-card-title">${a.title}</div>
       </div>
-      ${a.summary?`<div class="article-card-summary">${a.summary}</div>`:''}
-      <div class="article-card-tags">${typeBadge}${tagsHtml}${cdcInfo}</div>
-      ${collectBtn ? `<div class="card-collect-row" onclick="event.preventDefault()">${collectBtn}</div>` : ''}
+      ${a.summary ? '<div class="article-card-summary">' + a.summary + '</div>' : ''}
+      <div class="card-footer">
+        <div class="card-footer-tags">
+          ${typeBadge}${tagsHtml}
+        </div>
+        <div class="card-footer-actions">
+          ${cdcBadge}
+          ${collectBtn ? `<span onclick="event.preventDefault()">${collectBtn}</span>` : ''}
+        </div>
+      </div>
     </a>`;
   }).join('');
 }
