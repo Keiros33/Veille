@@ -1152,8 +1152,8 @@ body {
 .card-footer-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
 
 /* Sort toggle button */
-.sort-btn.filter-toggle { background: var(--surface2); }
-.sort-btn.filter-toggle.on { background: rgba(168,200,48,0.2); color: #4a6800; border-color: rgba(168,200,48,0.5); font-weight: 700; }
+.sort-btn.filter-toggle { background: var(--surface2); border: 1.5px solid var(--border); }
+.sort-btn.filter-toggle.on { background: rgba(168,200,48,0.25); color: #3a5800; border-color: #8ab000; font-weight: 800; box-shadow: 0 0 0 2px rgba(168,200,48,0.2); }
 
 .article-card-top {
   display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px;
@@ -1198,7 +1198,16 @@ body {
 .card-action-btn:hover { background: var(--surface2); border-color: var(--accent); }
 
 /* ── DISPOSITIF CARDS ─────────────────────────────────────────────── */
-.disp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.disp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+
+/* Sous-menu collect */
+.collect-submenu-item {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; background: none; border: none;
+  cursor: pointer; text-align: left; font-family: inherit;
+  transition: background 0.12s;
+}
+.collect-submenu-item:hover { background: var(--surface2); }
 
 .disp-card {
   background: var(--surface); border: 1px solid var(--border);
@@ -1395,19 +1404,34 @@ body {
     <div class="panel active" id="panel-veille">
       <div class="sort-row" style="flex-wrap:wrap;gap:6px;">
         <span class="sort-label">Trier par</span>
-        <button class="sort-btn active" onclick="setSort('date', this)">Date</button>
-        <button class="sort-btn" onclick="setSort('dispositif', this)">Dispositifs d'abord</button>
-        <button class="sort-btn" id="sort-cdc-btn" onclick="setSort('cdc', this)" title="CDC en premier">📋 CDC en 1er</button>
-        <button class="sort-btn filter-toggle" id="btn-cdc-only" onclick="toggleCDCOnly()"
-          title="Afficher uniquement les dispositifs avec cahier des charges">
-          📋 Avec CDC uniquement
-        </button>
+        <button class="sort-btn active" id="sort-date-btn" onclick="setSort('date', this)">Date</button>
+        <button class="sort-btn" id="sort-disp-btn" onclick="setSort('dispositif', this)">Dispositifs d'abord</button>
+        <button class="sort-btn" id="sort-cdc-btn" onclick="setSort('cdc', this)">📋 CDC en 1er</button>
+        <button class="sort-btn filter-toggle" id="btn-cdc-only" onclick="toggleCDCOnly()">📋 CDC uniquement</button>
         <span class="result-count" id="result-count">— articles</span>
         <div style="flex:1"></div>
-        <button onclick="collectAllMissing()" id="btn-collect-all"
-          style="padding:5px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--accent);background:var(--accent);color:var(--lime);white-space:nowrap;">
-          📥 Tout collecter les dispositifs
-        </button>
+        <!-- Bouton collect avec sous-menu -->
+        <div style="position:relative;" id="collect-all-wrap">
+          <button id="btn-collect-all" onclick="toggleCollectMenu()"
+            style="padding:5px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--accent);background:var(--accent);color:var(--lime);white-space:nowrap;display:flex;align-items:center;gap:6px;">
+            📥 Collecter tous les dispositifs <span style="font-size:9px;opacity:0.8;">▾</span>
+          </button>
+          <div id="collect-submenu" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:999;min-width:260px;overflow:hidden;">
+            <div style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);border-bottom:1px solid var(--border);">Choisir ce qu'on collecte</div>
+            <button onclick="collectAllMissing('all')" class="collect-submenu-item">
+              <span style="font-size:15px;">📥</span>
+              <div><div style="font-weight:700;font-size:12px;">Tous les dispositifs</div><div style="font-size:11px;color:var(--muted);">Avec et sans CDC</div></div>
+            </button>
+            <button onclick="collectAllMissing('cdc')" class="collect-submenu-item" style="border-top:1px solid var(--border);">
+              <span style="font-size:15px;">📋</span>
+              <div><div style="font-weight:700;font-size:12px;color:#3a6000;">Dispositifs avec CDC</div><div style="font-size:11px;color:var(--muted);">Qualité supérieure — recommandé</div></div>
+            </button>
+            <button onclick="collectAllMissing('nocdc')" class="collect-submenu-item" style="border-top:1px solid var(--border);">
+              <span style="font-size:15px;">🌐</span>
+              <div><div style="font-weight:700;font-size:12px;">Dispositifs sans CDC</div><div style="font-size:11px;color:var(--muted);">Via la page web uniquement</div></div>
+            </button>
+          </div>
+        </div>
       </div>
       <div class="articles-list" id="articles-list">
         <div class="spinner"></div>
@@ -1861,60 +1885,78 @@ function filterDispositifs() {
 }
 
 // ── COLLECT ALL MISSING ───────────────────────────────────────────────
-async function collectAllMissing() {
-  // Récupérer les articles de type Dispositif non encore collectés
+function toggleCollectMenu() {
+  const menu = document.getElementById('collect-submenu');
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  menu.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    setTimeout(() => {
+      document.addEventListener('click', function closeMenu(e) {
+        if (!document.getElementById('collect-all-wrap')?.contains(e.target)) {
+          menu.style.display = 'none';
+          document.removeEventListener('click', closeMenu);
+        }
+      });
+    }, 10);
+  }
+}
+
+async function collectAllMissing(mode) {
+  // mode: 'all' | 'cdc' | 'nocdc'
+  const menuEl = document.getElementById('collect-submenu');
+  if (menuEl) menuEl.style.display = 'none';
   const btn = document.getElementById('btn-collect-all');
+  const resetBtn = () => { btn.disabled = false; btn.innerHTML = '📥 Collecter tous les dispositifs <span style="font-size:9px;opacity:.8">▾</span>'; };
   btn.disabled = true;
-  btn.textContent = '⏳ Chargement…';
+  btn.innerHTML = '⏳ Chargement…';
   try {
-    // Charger tous les articles dispositifs
     const arts = await fetch(API + '/api/articles?limit=2000').then(r => r.json());
     const collected = new Set(allDispositifs.map(d => d.source_url).filter(Boolean));
-    const toCollect = arts.filter(a => {
+    let toCollect = arts.filter(a => {
       const tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
       return tags.includes('⭐ Dispositif') && !collected.has(a.url);
     });
+    if (mode === 'cdc')   toCollect = toCollect.filter(a => !!a.pdf_url);
+    if (mode === 'nocdc') toCollect = toCollect.filter(a => !a.pdf_url);
+
+    const modeLabel = mode === 'cdc' ? 'avec CDC' : mode === 'nocdc' ? 'sans CDC' : '';
     if (!toCollect.length) {
-      showToast('✅ Tous les dispositifs sont déjà collectés !');
-      btn.disabled = false;
-      btn.innerHTML = '📥 Tout collecter';
-      return;
+      showToast('✅ Aucun dispositif ' + modeLabel + ' à collecter !');
+      resetBtn(); return;
     }
-    if (!confirm('Collecter ' + toCollect.length + ' dispositif(s) non encore collectés ? Cela utilisera des crédits API Claude.')) {
-      btn.disabled = false;
-      btn.innerHTML = '📥 Tout collecter';
-      return;
+    if (!confirm('Collecter ' + toCollect.length + ' dispositif(s) ' + (modeLabel ? '(' + modeLabel + ')' : '') + ' ? Cela utilisera des crédits Claude.')) {
+      resetBtn(); return;
     }
-    btn.textContent = '⏳ 0/' + toCollect.length;
     let done = 0, errors = 0;
     for (const a of toCollect) {
+      btn.innerHTML = '⏳ ' + (done + errors + 1) + '/' + toCollect.length + '…';
       try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 28000);
         const d = await fetch(API + '/api/collect', {
           method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({url: a.url, title: a.title, id: a.id, pdf_url: a.pdf_url || ''})
-        }).then(r => r.json());
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({url: a.url, title: a.title, id: a.id, pdf_url: a.pdf_url || ''}),
+          signal: ctrl.signal
+        }).then(r => { clearTimeout(tid); return r.json(); });
         if (!d.error) {
           await fetch(API + '/api/dispositifs', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify(d)
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(d)
           });
           done++;
         } else { errors++; }
       } catch(e) { errors++; }
-      btn.textContent = '⏳ ' + (done + errors) + '/' + toCollect.length;
     }
     showToast('✅ ' + done + ' collecté(s)' + (errors ? ' — ' + errors + ' erreur(s)' : ''));
     loadDispositifs();
   } catch(e) {
     showToast('❌ Erreur : ' + e.message);
   }
-  btn.disabled = false;
-  btn.innerHTML = '📥 Tout collecter';
+  resetBtn();
 }
 
-// ── RENDER CDC ────────────────────────────────────────────────────────
+
 function renderCDC(list) {
   const container = document.getElementById('cdc-list');
   document.getElementById('cdc-count').textContent = list.length + ' document' + (list.length > 1 ? 's' : '');
@@ -2077,9 +2119,17 @@ async function deleteV360Session(id) {
 }
 
 function setSort(mode, btn) {
-  sortMode = mode;
-  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  // Toggle : si déjà actif, repasser en tri par date
+  if (sortMode === mode && mode !== 'date') {
+    sortMode = 'date';
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+    const dateBtn = document.getElementById('sort-date-btn');
+    if (dateBtn) dateBtn.classList.add('active');
+  } else {
+    sortMode = mode;
+    document.querySelectorAll('.sort-btn:not(.filter-toggle)').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
   applyFilters();
 }
 
