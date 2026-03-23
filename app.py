@@ -1080,11 +1080,25 @@ body {
 .panel.active { display: block; }
 
 /* ── SORT ROW ─────────────────────────────────────────────────────── */
-.sort-row {
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 14px;
-}
+.sort-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .sort-label { font-size: 11px; color: var(--muted); }
+/* Vue filtre veille */
+.vf-row { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+.vf-btns { display:flex; gap:6px; }
+.vf-btn {
+  padding:5px 14px; border-radius:100px; font-size:11px; font-weight:700;
+  border:1.5px solid var(--border); background:var(--surface);
+  color:var(--muted); cursor:pointer; transition:all .15s; white-space:nowrap;
+}
+.vf-btn.active { background:var(--accent); color:var(--lime); border-color:var(--accent); }
+.vf-btn:hover:not(.active) { border-color:var(--accent3); color:var(--text); }
+.vf-right { display:flex; align-items:center; gap:8px; margin-left:auto; flex-wrap:wrap; }
+.vf-sort-select {
+  padding:5px 10px; border:1px solid var(--border); border-radius:6px;
+  font-size:11px; background:var(--surface2); color:var(--muted);
+  outline:none; cursor:pointer; font-family:'DM Sans',sans-serif;
+}
+.vf-sort-select:hover { border-color:var(--accent); color:var(--text); }
 .sort-btn {
   padding: 4px 12px; border-radius: 100px;
   font-size: 11px; font-weight: 600; cursor: pointer;
@@ -1502,34 +1516,42 @@ body {
 
     <!-- PANEL VEILLE -->
     <div class="panel active" id="panel-veille">
-      <div class="sort-row" style="flex-wrap:wrap;gap:6px;">
-        <span class="sort-label">Trier par</span>
-        <button class="sort-btn active" id="sort-date-btn" onclick="setSort('date', this)">Date</button>
-        <button class="sort-btn" id="sort-disp-btn" onclick="setSort('dispositif', this)">Dispositifs d'abord</button>
-        <button class="sort-btn" id="sort-cdc-btn" onclick="setSort('cdc', this)">📋 CDC en 1er</button>
-        <button class="sort-btn filter-toggle" id="btn-cdc-only" onclick="toggleCDCOnly()">📋 CDC uniquement</button>
-        <span class="result-count" id="result-count">— articles</span>
-        <div style="flex:1"></div>
-        <!-- Bouton collect avec sous-menu -->
-        <div style="position:relative;" id="collect-all-wrap">
-          <button id="btn-collect-all" onclick="toggleCollectMenu()"
-            style="padding:5px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--accent);background:var(--accent);color:var(--lime);white-space:nowrap;display:flex;align-items:center;gap:6px;">
-            📥 Collecter tous les dispositifs <span style="font-size:9px;opacity:0.8;">▾</span>
-          </button>
-          <div id="collect-submenu" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:999;min-width:260px;overflow:hidden;">
-            <div style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);border-bottom:1px solid var(--border);">Choisir ce qu'on collecte</div>
-            <button onclick="collectAllMissing('all')" class="collect-submenu-item">
-              <span style="font-size:15px;">📥</span>
-              <div><div style="font-weight:700;font-size:12px;">Tous les dispositifs</div><div style="font-size:11px;color:var(--muted);">Avec et sans CDC</div></div>
+      <!-- Ligne 1 : filtres de type -->
+      <div class="vf-row">
+        <div class="vf-btns">
+          <button class="vf-btn active" id="vft-all"  onclick="setViewFilter('all',  this)">Tout</button>
+          <button class="vf-btn"        id="vft-actu" onclick="setViewFilter('actu', this)">📰 Actualités</button>
+          <button class="vf-btn"        id="vft-disp" onclick="setViewFilter('disp', this)">⭐ Dispositifs</button>
+          <button class="vf-btn"        id="vft-cdc"  onclick="setViewFilter('cdc',  this)">📋 Avec CDC</button>
+        </div>
+        <div class="vf-right">
+          <span class="result-count" id="result-count">— articles</span>
+          <select class="vf-sort-select" onchange="setSortFromSelect(this)">
+            <option value="date">Trier : Date</option>
+            <option value="cdc">CDC en 1er</option>
+            <option value="dispositif">Dispositifs d'abord</option>
+          </select>
+          <!-- Bouton collect avec sous-menu -->
+          <div style="position:relative;" id="collect-all-wrap">
+            <button id="btn-collect-all" onclick="toggleCollectMenu()"
+              style="padding:5px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--accent);background:var(--accent);color:var(--lime);white-space:nowrap;display:flex;align-items:center;gap:6px;">
+              📥 Tout collecter <span style="font-size:9px;opacity:0.8;">▾</span>
             </button>
-            <button onclick="collectAllMissing('cdc')" class="collect-submenu-item" style="border-top:1px solid var(--border);">
-              <span style="font-size:15px;">📋</span>
-              <div><div style="font-weight:700;font-size:12px;color:#3a6000;">Dispositifs avec CDC</div><div style="font-size:11px;color:var(--muted);">Qualité supérieure — recommandé</div></div>
-            </button>
-            <button onclick="collectAllMissing('nocdc')" class="collect-submenu-item" style="border-top:1px solid var(--border);">
-              <span style="font-size:15px;">🌐</span>
-              <div><div style="font-weight:700;font-size:12px;">Dispositifs sans CDC</div><div style="font-size:11px;color:var(--muted);">Via la page web uniquement</div></div>
-            </button>
+            <div id="collect-submenu" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:999;min-width:260px;overflow:hidden;">
+              <div style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);border-bottom:1px solid var(--border);">Choisir ce qu'on collecte</div>
+              <button onclick="collectAllMissing('all')" class="collect-submenu-item">
+                <span style="font-size:15px;">📥</span>
+                <div><div style="font-weight:700;font-size:12px;">Tous les dispositifs</div><div style="font-size:11px;color:var(--muted);">Avec et sans CDC</div></div>
+              </button>
+              <button onclick="collectAllMissing('cdc')" class="collect-submenu-item" style="border-top:1px solid var(--border);">
+                <span style="font-size:15px;">📋</span>
+                <div><div style="font-weight:700;font-size:12px;color:#3a6000;">Dispositifs avec CDC</div><div style="font-size:11px;color:var(--muted);">Qualité supérieure — recommandé</div></div>
+              </button>
+              <button onclick="collectAllMissing('nocdc')" class="collect-submenu-item" style="border-top:1px solid var(--border);">
+                <span style="font-size:15px;">🌐</span>
+                <div><div style="font-weight:700;font-size:12px;">Dispositifs sans CDC</div><div style="font-size:11px;color:var(--muted);">Via la page web uniquement</div></div>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1587,9 +1609,15 @@ body {
       <div class="sort-row" style="flex-wrap:wrap;gap:8px;align-items:center;">
         <span class="result-count" id="journal-count">— éditions</span>
         <div style="flex:1"></div>
+        <select id="journal-period" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text);outline:none;cursor:pointer;">
+          <option value="7">7 derniers jours</option>
+          <option value="14">14 derniers jours</option>
+          <option value="30" selected>30 derniers jours</option>
+          <option value="0">Tous les articles visibles</option>
+        </select>
         <button id="btn-gen-journal" onclick="generateJournal()"
           style="padding:5px 16px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:var(--accent);color:var(--lime);white-space:nowrap;">
-          📰 Générer une édition
+          📰 Générer
         </button>
       </div>
       <!-- Vue journal courant -->
@@ -1615,6 +1643,8 @@ body {
           <span class="journal-page-info" id="journal-page-info"></span>
           <button class="journal-page-btn" id="journal-next" onclick="journalChangePage(1)">Suivant →</button>
           <button onclick="saveJournal()" style="padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--accent);background:none;color:var(--accent);">💾 Sauvegarder</button>
+          <button onclick="exportJournalHTML()" style="padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:var(--surface2);color:var(--muted);">⬇ HTML</button>
+          <button onclick="exportJournalPDF()" style="padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:var(--surface2);color:var(--muted);">🖨 PDF</button>
           <button onclick="closeJournalCurrent()" style="padding:5px 12px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--muted);">✕ Fermer</button>
         </div>
       </div>
@@ -1872,35 +1902,98 @@ async function deleteJournalEdition(e, id) {
   loadJournalHistory();
 }
 
+function exportJournalHTML() {
+  if (!journalSummaries.length) { showToast('Aucune edition a exporter'); return; }
+  var today = new Date().toLocaleDateString('fr-FR');
+  var edNum = document.getElementById('journal-edition-num').textContent;
+  var cards = journalSummaries.map(function(s) {
+    var imp = s.importance === 'haute' ? 'border-top:3px solid #1a3c2e;' : 'border-top:3px solid #ddd;';
+    var dateStr = s.date ? s.date.slice(5).replace('-','/') : '';
+    return '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;break-inside:avoid;' + imp + '">' +
+      '<div style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#888;">' + (s.category || 'Actualite') + '</div>' +
+      '<div style="font-family:Georgia,serif;font-weight:700;font-size:13px;line-height:1.3;color:#111;">' + s.title + '</div>' +
+      '<div style="font-size:12px;color:#444;line-height:1.65;flex:1;">' + (s.summary || '') + '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:6px;margin-top:4px;">' +
+        '<span style="font-weight:600;">' + (s.source||'') + '</span>' +
+        '<span>' + dateStr + '</span>' +
+        (s.url ? '<a href="' + s.url + '" style="color:#1a3c2e;font-weight:700;text-decoration:none;">Lire &rarr;</a>' : '') +
+      '</div></div>';
+  }).join('');
+  var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">' +
+    '<title>Journal SubstanCiel — ' + today + '</title>' +
+    '<style>body{font-family:Georgia,serif;background:#faf8f4;margin:0;padding:32px;}' +
+    '.masthead{border-bottom:3px solid #1a3c2e;padding-bottom:16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-end;}' +
+    '.name{font-size:2.4rem;font-weight:900;color:#1a3c2e;letter-spacing:-.03em;line-height:1;}' +
+    '.name em{font-style:italic;color:#7ab200;}' +
+    '.meta{font-size:11px;color:#888;text-align:right;line-height:1.6;}' +
+    '.divider{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#aaa;border-top:1px solid #ddd;border-bottom:1px solid #ddd;padding:5px 0;margin-bottom:16px;}' +
+    '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}' +
+    '@media print{body{padding:16px;}.grid{grid-template-columns:repeat(3,1fr);}}</style></head>' +
+    '<body>' +
+    '<div class="masthead"><div><div class="name">Sub<em>stan</em>Ciel</div><div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#aaa;margin-top:2px;">Journal de Veille</div></div>' +
+    '<div class="meta"><div style="font-size:13px;font-weight:700;color:#111;">' + edNum + '</div><div>' + today + '</div><div style="font-size:10px;">' + journalSummaries.length + ' articles</div></div></div>' +
+    '<div class="divider"><span>Actualites de la veille — resumes editoriaux</span></div>' +
+    '<div class="grid">' + cards + '</div>' +
+    '</body></html>';
+  var blob = new Blob([html], {type: 'text/html;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'journal-substanciel-' + today.replace(/\//g, '-') + '.html';
+  a.click();
+  showToast('Journal exporté !');
+}
+
+function exportJournalPDF() {
+  if (!journalSummaries.length) { showToast('Aucune edition a exporter'); return; }
+  var today = new Date().toLocaleDateString('fr-FR');
+  var edNum = document.getElementById('journal-edition-num').textContent;
+  var cards = journalSummaries.map(function(s) {
+    var imp = s.importance === 'haute' ? 'border-top:3px solid #1a3c2e;' : 'border-top:3px solid #ddd;';
+    var dateStr = s.date ? s.date.slice(5).replace('-','/') : '';
+    return '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:7px;break-inside:avoid;margin-bottom:12px;' + imp + '">' +
+      '<div style="font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#999;">' + (s.category || 'Actualite') + '</div>' +
+      '<div style="font-family:Georgia,serif;font-weight:700;font-size:12px;line-height:1.3;color:#111;">' + s.title + '</div>' +
+      '<div style="font-size:11px;color:#444;line-height:1.6;">' + (s.summary || '') + '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:9px;color:#aaa;border-top:1px solid #eee;padding-top:5px;">' +
+        '<span style="font-weight:600;">' + (s.source||'') + '</span>' +
+        '<span>' + dateStr + '</span>' +
+      '</div></div>';
+  }).join('');
+  var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Journal SubstanCiel</title>' +
+    '<style>*{box-sizing:border-box;}body{font-family:Georgia,serif;background:#fff;margin:0;padding:20px 28px;color:#111;}' +
+    '.masthead{border-bottom:3px solid #1a3c2e;padding-bottom:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;}' +
+    '.name{font-size:2rem;font-weight:900;color:#1a3c2e;letter-spacing:-.03em;line-height:1;}' +
+    '.name em{font-style:italic;color:#7ab200;}' +
+    '.divider{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#aaa;border-top:1px solid #ddd;border-bottom:1px solid #ddd;padding:4px 0;margin-bottom:14px;display:flex;justify-content:space-between;}' +
+    '.grid{columns:3;column-gap:12px;}' +
+    '@media print{@page{margin:14mm;}body{padding:0;}.grid{columns:3;}}</style></head>' +
+    '<body>' +
+    '<div class="masthead"><div><div class="name">Sub<em>stan</em>Ciel</div><div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#aaa;margin-top:2px;">Journal de Veille</div></div>' +
+    '<div style="font-size:11px;color:#888;text-align:right;line-height:1.6;"><div style="font-size:12px;font-weight:700;color:#111;">' + edNum + '</div><div>' + today + '</div><div style="font-size:9px;">' + journalSummaries.length + ' articles</div></div></div>' +
+    '<div class="divider"><span>Actualites de la veille</span><span>' + today + '</span></div>' +
+    '<div class="grid">' + cards + '</div>' +
+    '</body></html>';
+  var w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(function(){ w.print(); }, 600);
+}
+
 async function generateJournal() {
   var btn = document.getElementById('btn-gen-journal');
   btn.disabled = true; btn.textContent = '⏳ Génération...';
-  // Prendre les 24 dernières actualités
-  // Utiliser les articles actuellement filtrés et visibles dans la veille
-  var visibleActualites = [];
-  var listEl = document.getElementById('articles-list');
-  if (listEl) {
-    listEl.querySelectorAll('.acard').forEach(function(card) {
-      // Récupérer le titre depuis la carte pour matcher avec allArticles
-      var titleEl = card.querySelector('.acard-title a');
-      if (titleEl) {
-        var href = titleEl.getAttribute('href') || '';
-        var match = allArticles.find(function(a) { return encodeURI(a.url||'') === href; });
-        if (match) {
-          var tags = Array.isArray(match.tags) ? match.tags : JSON.parse(match.tags || '[]');
-          if (tags.indexOf('⭐ Actualité') >= 0) visibleActualites.push(match);
-        }
-      }
-    });
-  }
-  // Fallback : toutes les actualités si DOM vide
-  if (!visibleActualites.length) {
-    visibleActualites = allArticles.filter(function(a) {
-      var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
-      return tags.indexOf('⭐ Actualité') >= 0;
-    });
-  }
-  var acts = visibleActualites.slice(0, 24);
+
+  var periodDays = parseInt(document.getElementById('journal-period').value) || 0;
+  var cutoff = periodDays > 0 ? new Date(Date.now() - periodDays * 86400000) : null;
+
+  var acts = allArticles.filter(function(a) {
+    var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+    if (tags.indexOf('⭐ Actualité') < 0) return false;
+    if (cutoff && a.scraped_at && new Date(a.scraped_at) < cutoff) return false;
+    return true;
+  }).slice(0, 24);
+
   if (!acts.length) {
     showToast('Aucune actualité disponible'); btn.disabled=false; btn.textContent='📰 Générer une édition'; return;
   }
@@ -2022,62 +2115,75 @@ function updateStats() {
 }
 
 // ── FILTERING ─────────────────────────────────────────────────────────
-// Filtre CDC only
-let cdcOnly = false;
-function toggleCDCOnly() {
-  cdcOnly = !cdcOnly;
-  const btn = document.getElementById('btn-cdc-only');
-  if (btn) btn.classList.toggle('on', cdcOnly);
+// ── FILTRES VUE ──────────────────────────────────────────────────────
+var viewFilter = 'all'; // all | actu | disp | cdc
+
+function setViewFilter(mode, el) {
+  viewFilter = mode;
+  document.querySelectorAll('.vf-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  applyFilters();
+}
+
+function setSortFromSelect(sel) {
+  sortMode = sel.value;
   applyFilters();
 }
 
 function applyFilters() {
-  let filtered = allArticles;
+  var filtered = allArticles;
 
-  // Search
-  if (searchQ) {
-    const q = searchQ.toLowerCase();
-    filtered = filtered.filter(a =>
-      (a.title||'').toLowerCase().includes(q) ||
-      (a.summary||'').toLowerCase().includes(q) ||
-      (a.source||'').toLowerCase().includes(q)
-    );
+  // 1. Filtre de vue (onglets)
+  if (viewFilter === 'actu') {
+    filtered = filtered.filter(function(a) {
+      var t = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+      return t.indexOf('⭐ Actualité') >= 0;
+    });
+  } else if (viewFilter === 'disp') {
+    filtered = filtered.filter(function(a) {
+      var t = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+      return t.indexOf('⭐ Dispositif') >= 0;
+    });
+  } else if (viewFilter === 'cdc') {
+    filtered = filtered.filter(function(a) { return !!a.pdf_url; });
   }
 
-  // Tag filters
-  TAG_GROUPS.forEach(g => {
-    const active = filterState[g.key].active;
+  // 2. Recherche texte
+  if (searchQ) {
+    var q = searchQ.toLowerCase();
+    filtered = filtered.filter(function(a) {
+      return (a.title||'').toLowerCase().includes(q) ||
+             (a.summary||'').toLowerCase().includes(q) ||
+             (a.source||'').toLowerCase().includes(q);
+    });
+  }
+
+  // 3. Filtres tags sidebar
+  TAG_GROUPS.forEach(function(g) {
+    var active = filterState[g.key].active;
     if (!active.size) return;
-    filtered = filtered.filter(a => {
-      const tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
-      return [...active].some(t => tags.includes(t));
+    filtered = filtered.filter(function(a) {
+      var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+      return [...active].some(function(t){ return tags.includes(t); });
     });
   });
 
-  // Filtre CDC uniquement
-  if (cdcOnly) {
-    filtered = filtered.filter(a => !!a.pdf_url);
-  }
-
-  // Sort
-  if (sortMode === 'date') {
-    filtered.sort((a, b) => new Date(b.scraped_at) - new Date(a.scraped_at));
-  } else if (sortMode === 'cdc') {
-    // CDC en premier : articles avec pdf_url d'abord, puis par date
-    filtered.sort((a, b) => {
+  // 4. Tri
+  if (sortMode === 'cdc') {
+    filtered.sort(function(a, b) {
       if (a.pdf_url && !b.pdf_url) return -1;
       if (!a.pdf_url && b.pdf_url) return 1;
       return new Date(b.scraped_at) - new Date(a.scraped_at);
     });
-  } else {
-    // Dispositifs d'abord
-    filtered.sort((a, b) => {
-      const ad = (Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags||'[]')).includes('⭐ Dispositif');
-      const bd = (Array.isArray(b.tags) ? b.tags : JSON.parse(b.tags||'[]')).includes('⭐ Dispositif');
-      if (ad && !bd) return -1;
-      if (!ad && bd) return 1;
+  } else if (sortMode === 'dispositif') {
+    filtered.sort(function(a, b) {
+      var ad = (Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]')).includes('⭐ Dispositif');
+      var bd = (Array.isArray(b.tags)?b.tags:JSON.parse(b.tags||'[]')).includes('⭐ Dispositif');
+      if (ad && !bd) return -1; if (!ad && bd) return 1;
       return new Date(b.scraped_at) - new Date(a.scraped_at);
     });
+  } else {
+    filtered.sort(function(a, b) { return new Date(b.scraped_at) - new Date(a.scraped_at); });
   }
 
   document.getElementById('result-count').textContent = filtered.length + ' article' + (filtered.length > 1 ? 's' : '');
