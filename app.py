@@ -586,7 +586,7 @@ GRILLE À REMPLIR (19 champs obligatoires) :
 - Titre : nom exact du dispositif
 - Nature : catégorie parmi [Subvention, Prêt, Avance remboursable, Garantie, Crédit d'impôt, Investissement en fonds propres, Aide en nature, Exonération fiscale]
 - Bénéficiaire : parmi [Entreprise, PME, TPE, ETI, GE, Start-up, Association, Collectivité, Agriculteur, Particulier, Chercheur, ESS]
-- Type de dépôt : modalités de dépôt du dossier
+- Type de dépôt : UNIQUEMENT une de ces 4 valeurs exactes : "Au fil de l'eau", "Date", "Clôturé", "En attente de renouvellement"
 - Date de fermeture : date limite de candidature
 - Objectif : objectif principal du dispositif (concis)
 - Types de dépenses : uniquement parmi [Investissement, Fonctionnement, Étude]
@@ -604,6 +604,14 @@ GRILLE À REMPLIR (19 champs obligatoires) :
 RÈGLES STRICTES :
 - Toute information absente = "Information non fournie"
 - Aucune déduction ni hypothèse
+- LONGUEURS MAXIMALES STRICTES (pour le rendu PowerPoint) :
+  * objectif : 200 caractères max
+  * operations_eligibles : 300 caractères max
+  * depenses_eligibles : 300 caractères max
+  * criteres_eligibilite : 400 caractères max
+  * montants_taux : 250 caractères max
+  * points_vigilance : 250 caractères max
+  * Si le contenu dépasse la limite, résume en gardant l'essentiel
 - Réponse UNIQUEMENT en JSON valide avec ces clés exactes :
 guichet_financeur, guichet_instructeur, titre, nature, beneficiaire, type_depot,
 date_fermeture, objectif, types_depenses, operations_eligibles, depenses_eligibles,
@@ -631,10 +639,10 @@ def generate_dispositif_pptx(data):
 
     # ── Titre : toujours 24pt, réduction jusqu'à 14pt si trop long ──────────
     def titre_font_size(t):
+        # Titre fixé à 20pt comme demandé, réduction si très long
         n = len(t)
-        if n <= 35:  return Pt(24)
-        if n <= 50:  return Pt(20)
-        if n <= 70:  return Pt(17)
+        if n <= 60:  return Pt(20)
+        if n <= 80:  return Pt(17)
         return Pt(14)
 
     # ── Logo fetch : Google Favicons (sz=128) ────────────────────────────────
@@ -773,7 +781,17 @@ def generate_dispositif_pptx(data):
         elif sid == 26:
             # NATURE / FINANCEUR / INSTRUCTEUR / DEPOT
             paras = list(shape.text_frame.paragraphs)
-            depot_txt = safe(data.get('type_depot'))
+            # Normaliser le dépôt aux 4 valeurs autorisées
+            DEPOT_VALEURS = ["Au fil de l'eau", "Date", "Clôturé", "En attente de renouvellement"]
+            raw_depot = safe(data.get('type_depot')).lower()
+            if 'fil' in raw_depot or 'continu' in raw_depot or 'guichet' in raw_depot:
+                depot_txt = "Au fil de l'eau"
+            elif 'clôtur' in raw_depot or 'clotur' in raw_depot or 'fermé' in raw_depot or 'ferm' in raw_depot:
+                depot_txt = "Clôturé"
+            elif 'renouvell' in raw_depot or 'attente' in raw_depot:
+                depot_txt = "En attente de renouvellement"
+            else:
+                depot_txt = "Date"
             fc = safe(data.get('date_fermeture'))
             if fc and fc != '—':
                 depot_txt += f' — Clôture : {fc}'
@@ -826,10 +844,10 @@ def generate_dispositif_pptx(data):
             set_second_para(shape, safe(data.get('beneficiaire')))
 
         elif sid == 15:
-            set_second_para(shape, safe(data.get('montants_taux')))
+            set_second_para(shape, safe(data.get('montants_taux'))[:250])
 
         elif sid == 16:
-            set_second_para(shape, safe(data.get('points_vigilance')))
+            set_second_para(shape, safe(data.get('points_vigilance'))[:250])
 
         elif sid == 5:
             # Logo zone slide 2
