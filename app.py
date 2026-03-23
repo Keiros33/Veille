@@ -1876,10 +1876,31 @@ async function generateJournal() {
   var btn = document.getElementById('btn-gen-journal');
   btn.disabled = true; btn.textContent = '⏳ Génération...';
   // Prendre les 24 dernières actualités
-  var acts = allArticles.filter(function(a) {
-    var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
-    return tags.indexOf('⭐ Actualité') >= 0;
-  }).slice(0, 24);
+  // Utiliser les articles actuellement filtrés et visibles dans la veille
+  var visibleActualites = [];
+  var listEl = document.getElementById('articles-list');
+  if (listEl) {
+    listEl.querySelectorAll('.acard').forEach(function(card) {
+      // Récupérer le titre depuis la carte pour matcher avec allArticles
+      var titleEl = card.querySelector('.acard-title a');
+      if (titleEl) {
+        var href = titleEl.getAttribute('href') || '';
+        var match = allArticles.find(function(a) { return encodeURI(a.url||'') === href; });
+        if (match) {
+          var tags = Array.isArray(match.tags) ? match.tags : JSON.parse(match.tags || '[]');
+          if (tags.indexOf('⭐ Actualité') >= 0) visibleActualites.push(match);
+        }
+      }
+    });
+  }
+  // Fallback : toutes les actualités si DOM vide
+  if (!visibleActualites.length) {
+    visibleActualites = allArticles.filter(function(a) {
+      var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+      return tags.indexOf('⭐ Actualité') >= 0;
+    });
+  }
+  var acts = visibleActualites.slice(0, 24);
   if (!acts.length) {
     showToast('Aucune actualité disponible'); btn.disabled=false; btn.textContent='📰 Générer une édition'; return;
   }
@@ -7544,12 +7565,12 @@ def summarize_articles():
     articles_to_summarize = data.get('articles', [])
     if not articles_to_summarize:
         return jsonify({'error': 'No articles provided'}), 400
-    SUMMARIZE_PROMPT = "Tu es redacteur du Journal SubstanCiel. Pour chaque article, genere un resume flash en 2-3 phrases, style journalistique concis. Reponds UNIQUEMENT en JSON : {\"summary\": \"...\", \"category\": \"...\", \"importance\": \"haute|normale\"}"
+    SUMMARIZE_PROMPT = "Tu es redacteur editorial du Journal SubstanCiel, veille sur les financements et politiques publiques. Redige un resume journalistique de 5 a 6 phrases : contextualise le sujet, explique les enjeux pour les acteurs concernes, et mentionne les elements cles (montants, calendrier, territoires si disponibles). Style clair, informatif, sans jargon. Reponds UNIQUEMENT en JSON : {\"summary\": \"...\", \"category\": \"...\", \"importance\": \"haute|normale\"}"
     summaries = []
     for art in articles_to_summarize[:24]:
         try:
             user_content = "Titre : " + art.get('title','') + "\nSource : " + art.get('source','') + "\nResume : " + (art.get('summary','') or '')
-            payload = json.dumps({"model": "claude-haiku-4-5-20251001", "max_tokens": 200, "system": SUMMARIZE_PROMPT, "messages": [{"role": "user", "content": user_content}]}).encode()
+            payload = json.dumps({"model": "claude-haiku-4-5-20251001", "max_tokens": 400, "system": SUMMARIZE_PROMPT, "messages": [{"role": "user", "content": user_content}]}).encode()
             req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={"Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01"}, method="POST")
             with urlopen(req, timeout=15) as resp:
                 result = json.loads(resp.read())
