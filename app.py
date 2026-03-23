@@ -1095,7 +1095,31 @@ body {
 .result-count { margin-left: auto; font-size: 11px; color: var(--muted); }
 
 /* ── ARTICLE CARDS ────────────────────────────────────────────────── */
-.articles-list { display: flex; flex-direction: column; gap: 10px; }
+.articles-list { display: flex; flex-direction: column; gap: 8px; }
+/* ── NOUVELLES CARTES ARTICLE ── */
+.acard { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; border-left:3px solid var(--border); transition:box-shadow .15s; }
+.acard:hover { box-shadow:0 2px 12px rgba(0,0,0,.07); }
+.acard-disp { border-left-color:var(--lime); }
+.acard-cdc  { border-left-color:var(--accent3); background:rgba(26,60,46,.02); }
+.acard-header { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+.acard-source { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+.acard-date   { font-size:10px; color:var(--muted); margin-left:auto; }
+.acard-title  { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; line-height:1.35; margin-bottom:5px; }
+.card-title-link { color:var(--text); text-decoration:none; }
+.card-title-link:hover { color:var(--accent); text-decoration:underline; }
+.acard-summary { font-size:12px; color:var(--muted); line-height:1.5; margin-bottom:8px; }
+.acard-footer { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:8px; border-top:1px solid var(--border); }
+.acard-tags   { display:flex; gap:4px; flex-wrap:wrap; flex:1; min-width:0; }
+.acard-actions{ display:flex; gap:6px; flex-shrink:0; align-items:center; }
+.atag { font-size:10px; padding:2px 7px; border-radius:100px; background:var(--surface2); color:var(--muted); border:1px solid var(--border); }
+.atag-ref { background:rgba(200,232,78,.15); color:#3a6000; border-color:rgba(200,232,78,.4); font-weight:700; }
+.abtn { font-size:11px; font-weight:700; padding:4px 10px; border-radius:6px; cursor:pointer; border:none; white-space:nowrap; }
+.abtn-cdc    { background:rgba(200,232,78,.15); color:#3a6000; border:1px solid rgba(200,232,78,.4); }
+.abtn-cdc:hover { background:rgba(200,232,78,.3); }
+.abtn-nocdc  { background:var(--surface2); color:var(--muted); border:1px solid var(--border); font-weight:400; cursor:default; }
+.abtn-collect { background:var(--surface2); color:var(--accent); border:1px solid var(--border); }
+.abtn-collect:hover { background:var(--accent); color:white; }
+.abtn-collect-cdc { background:rgba(26,60,46,.08); border-color:var(--accent3); color:var(--accent); }
 
 .article-card {
   background: var(--surface);
@@ -1558,10 +1582,10 @@ TAG_GROUPS.forEach(g => {
 function collectFromVeille(e) {
   e.stopPropagation(); e.preventDefault();
   var btn = e.currentTarget;
-  var url = btn.getAttribute('data-url');
-  var title = btn.getAttribute('data-title');
+  var url   = decodeURIComponent(btn.getAttribute('data-url') || '');
+  var title = decodeURIComponent(btn.getAttribute('data-title') || '');
   var artId = btn.getAttribute('data-id');
-  var pdfUrl = btn.getAttribute('data-pdf') || '';
+  var pdfUrl = decodeURIComponent(btn.getAttribute('data-pdf') || '');
   btn.disabled = true;
   btn.innerHTML = '<span class="collect-icon">⏳</span> Collecte…';
   const ctrl = new AbortController();
@@ -1756,53 +1780,69 @@ function applyFilters() {
 
 // ── RENDER ARTICLES ───────────────────────────────────────────────────
 function renderArticles(list) {
-  const DISP = '⭐ Dispositif', ACT = '⭐ Actualité';
-  const disps = list.filter(a => { const t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.indexOf(DISP)>=0; });
-  const acts  = list.filter(a => { const t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.indexOf(ACT)>=0; });
-  const container = document.getElementById('articles-list');
+  var DISP = '⭐ Dispositif', ACT = '⭐ Actualité';
+  var disps = list.filter(function(a){ var t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.indexOf(DISP)>=0; });
+  var acts  = list.filter(function(a){ var t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.indexOf(ACT)>=0; });
+  var container = document.getElementById('articles-list');
   if (!disps.length && !acts.length) {
     container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Aucun résultat</div><p>Sélectionnez ⭐ Dispositif ou ⭐ Actualité</p></div>';
     return;
   }
-  let html = '';
+  var html = '';
   if (disps.length) {
     html += '<div class="section-label">⭐ Dispositifs <span class="section-count">'+disps.length+'</span></div>';
-    html += renderArticleCards(disps, true);
+    html += renderCards(disps, true);
   }
   if (acts.length) {
     html += '<div class="section-label">📰 Actualités <span class="section-count">'+acts.length+'</span></div>';
-    html += renderArticleCards(acts, false);
+    html += renderCards(acts, false);
   }
   container.innerHTML = html;
+  // Attacher les events après injection
+  container.querySelectorAll('.btn-collect').forEach(function(btn){
+    btn.addEventListener('click', collectFromVeille);
+  });
+  container.querySelectorAll('.card-title-link').forEach(function(a){
+    a.addEventListener('click', function(e){ e.stopPropagation(); });
+  });
 }
 
-function renderArticleCards(list, showCollect) {
-  return list.map(function(a, idx) {
-    var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
-    var isDisp = tags.indexOf('⭐ Dispositif') >= 0;
-    var hasCDC = !!a.pdf_url;
-    var date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}) : '';
-    var subTags = tags.filter(function(t){ return t.charAt(0) !== '⭐'; }).slice(0,4);
-    var safeUrl   = (a.url||'').replace(/"/g,'&quot;');
-    var safeTitle = (a.title||'').replace(/"/g,'&quot;');
-    var safePdf   = (a.pdf_url||'').replace(/"/g,'&quot;');
+function renderCards(list, showCollect) {
+  return list.map(function(a) {
+    var tags     = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+    var isDisp   = tags.indexOf('⭐ Dispositif') >= 0;
+    var hasCDC   = !!a.pdf_url;
+    var date     = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}) : '';
+    var subTags  = tags.filter(function(t){ return t.charAt(0) !== '⭐'; }).slice(0, 4);
 
-    var typeBadge = isDisp ? '<span class="article-tag ref">⭐ Dispositif</span>' : '<span class="article-tag">⭐ Actualité</span>';
-    var tagsHtml  = subTags.map(function(t){ return '<span class="article-tag">'+t+'</span>'; }).join('');
-    var safePdfEncoded = encodeURI(a.pdf_url || '');
-    var cdcBtn    = hasCDC ? '<a class="cdc-badge" href="'+safePdfEncoded+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">📋 CDC</a>' : '<span class="cdc-badge-missing">📋 Pas de CDC</span>';
-    var collectBtn = showCollect ? '<button class="btn-collect'+(hasCDC?' with-cdc':'')+'" data-url="'+safeUrl+'" data-title="'+safeTitle+'" data-id="'+(a.id||0)+'" data-pdf="'+safePdf+'" onclick="collectFromVeille(event)">💾 Collecter</button>' : '';
+    // Construire les badges tags
+    var tagsHTML = (isDisp ? '<span class="atag atag-ref">⭐ Dispositif</span>' : '<span class="atag">⭐ Actualité</span>');
+    tagsHTML += subTags.map(function(t){ return '<span class="atag">'+t+'</span>'; }).join('');
 
-    var html  = '<a class="article-card'+(isDisp?' is-dispositif':'')+(hasCDC?' has-cdc':'')+'" href="'+a.url+'" target="_blank" rel="noopener">';
-    html += '<div class="article-card-meta"><span class="article-card-source">'+(a.source||'')+'</span><span class="article-card-date">'+date+'</span></div>';
-    html += '<div class="article-card-title">'+a.title+'</div>';
-    if (a.summary) html += '<div class="article-card-summary">'+a.summary+'</div>';
-    html += '<div class="card-footer"><div class="card-footer-tags">'+typeBadge+tagsHtml+'</div>';
-    html += '<div class="card-footer-actions">'+cdcBtn+(collectBtn ? '<span onclick="event.preventDefault()">'+collectBtn+'</span>' : '')+'</div></div>';
-    html += '</a>';
-    return html;
+    // Ligne d'actions : CDC + Collecter — PAS de lien imbriqué dans lien
+    var actionsHTML = '';
+    if (hasCDC) {
+      actionsHTML += '<button class="abtn abtn-cdc" onclick="window.open(this.dataset.url,'_blank');event.stopPropagation();" data-url="'+encodeURI(a.pdf_url)+'">📋 CDC</button>';
+    } else {
+      actionsHTML += '<span class="abtn abtn-nocdc">📋 Pas de CDC</span>';
+    }
+    if (showCollect) {
+      actionsHTML += '<button class="abtn abtn-collect'+(hasCDC?' abtn-collect-cdc':'')+'" data-url="'+encodeURIComponent(a.url||'')+'" data-title="'+encodeURIComponent(a.title||'')+'" data-id="'+(a.id||0)+'" data-pdf="'+encodeURIComponent(a.pdf_url||'')+'">💾 Collecter</button>';
+    }
+
+    var card = '<div class="acard'+(isDisp?' acard-disp':'')+(hasCDC?' acard-cdc':'')+'">';
+    card += '<div class="acard-header">';
+    card += '<span class="acard-source">'+(a.source||'')+'</span>';
+    card += '<span class="acard-date">'+date+'</span>';
+    card += '</div>';
+    card += '<div class="acard-title"><a class="card-title-link" href="'+encodeURI(a.url||'')+'" target="_blank">'+a.title+'</a></div>';
+    if (a.summary) card += '<div class="acard-summary">'+a.summary+'</div>';
+    card += '<div class="acard-footer"><div class="acard-tags">'+tagsHTML+'</div><div class="acard-actions">'+actionsHTML+'</div></div>';
+    card += '</div>';
+    return card;
   }).join('');
 }
+
 
 // ── RENDER DISPOSITIFS ────────────────────────────────────────────────
 function renderDispositifs(list) {
