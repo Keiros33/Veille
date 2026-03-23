@@ -1156,19 +1156,22 @@ body {
 .sort-btn.filter-toggle.on { background: rgba(168,200,48,0.25); color: #3a5800; border-color: #8ab000; font-weight: 800; box-shadow: 0 0 0 2px rgba(168,200,48,0.2); }
 
 .article-card-top {
-  display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px;
+  margin-bottom: 6px;
+}
+.article-card-meta {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 4px;
 }
 .article-card-source {
   font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.07em; color: var(--muted);
-  white-space: nowrap; margin-top: 2px;
+  letter-spacing: 0.07em; color: var(--muted); white-space: nowrap;
+}
+.article-card-date {
+  font-size: 10px; color: var(--muted); white-space: nowrap; margin-left: auto;
 }
 .article-card-title {
   font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px;
-  line-height: 1.35; color: var(--text); flex: 1;
-}
-.article-card-date {
-  font-size: 10px; color: var(--muted); white-space: nowrap; margin-top: 2px;
+  line-height: 1.35; color: var(--text);
 }
 .article-card-summary {
   font-size: 12px; color: var(--text2); line-height: 1.55;
@@ -1804,7 +1807,7 @@ function renderArticleCards(list, showCollect) {
     const cardClass = 'article-card'+(isDisp?' is-dispositif':'')+(hasCDC?' has-cdc':'');
     const summary   = a.summary ? '<div class="article-card-summary">'+a.summary+'</div>' : '';
     const footer    = '<div class="card-footer"><div class="card-footer-tags">'+typeBadge+tagsHtml+'</div><div class="card-footer-actions">'+cdcBadge+(collectBtn?'<span onclick="event.preventDefault()">'+collectBtn+'</span>':'')+'</div></div>';
-    return '<a class="'+cardClass+'" href="'+a.url+'" target="_blank" rel="noopener" style="animation-delay:'+Math.min(idx*0.03,0.4)+'s"><div class="article-card-top"><div><div class="article-card-source">'+(a.source||'')+'</div><div class="article-card-date">'+date+'</div></div><div class="article-card-title">'+a.title+'</div></div>'+summary+footer+'</a>';
+    return '<a class="'+cardClass+'" href="'+a.url+'" target="_blank" rel="noopener" style="animation-delay:'+Math.min(idx*0.03,0.4)+'s"><div class="article-card-top"><div class="article-card-meta"><span class="article-card-source">'+(a.source||'')+'</span><span class="article-card-date">'+date+'</span></div><div class="article-card-title">'+a.title+'</div></div>'+summary+footer+'</a>';
   }).join('');
 }
 
