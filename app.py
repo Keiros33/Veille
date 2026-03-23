@@ -272,6 +272,7 @@ def init_db():
         result_html TEXT,
         created_at TIMESTAMP DEFAULT NOW()
     )""")
+    cur.execute("CREATE TABLE IF NOT EXISTS journal_editions (id SERIAL PRIMARY KEY, title TEXT NOT NULL, edition_date DATE DEFAULT CURRENT_DATE, summaries JSONB NOT NULL DEFAULT '[]', created_at TIMESTAMP DEFAULT NOW())")
     conn.commit(); cur.close(); conn.close()
     log.info("DB ready")
 
@@ -1120,6 +1121,91 @@ body {
 .abtn-collect { background:var(--surface2); color:var(--accent); border:1px solid var(--border); }
 .abtn-collect:hover { background:var(--accent); color:white; }
 .abtn-collect-cdc { background:rgba(26,60,46,.08); border-color:var(--accent3); color:var(--accent); }
+.abtn-resume { background:var(--surface2); color:var(--muted); border:1px solid var(--border); font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;text-decoration:none; }
+.abtn-resume:hover { background:var(--surface); color:var(--accent); }
+
+/* ── JOURNAL DA ───────────────────────────────────────────────────── */
+.journal-masthead {
+  border-bottom: 3px solid var(--accent);
+  padding-bottom: 14px; margin-bottom: 20px;
+  display: flex; align-items: flex-end; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px;
+}
+.journal-name {
+  font-family: 'Playfair Display', 'Georgia', serif;
+  font-size: 2.4rem; font-weight: 900;
+  letter-spacing: -0.03em; color: var(--accent);
+  line-height: 1;
+}
+.journal-name em { font-style: italic; color: var(--lime2,#7ab200); }
+.journal-meta { font-size: 11px; color: var(--muted); text-align: right; line-height: 1.6; }
+.journal-edition-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted);
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  padding: 5px 0; margin-bottom: 16px;
+  display: flex; justify-content: space-between;
+}
+.journal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px; margin-bottom: 20px;
+}
+.journal-card {
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px; background: var(--surface);
+  display: flex; flex-direction: column; gap: 8px;
+  transition: box-shadow .15s;
+  position: relative; overflow: hidden;
+}
+.journal-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--border);
+}
+.journal-card.haute::before { background: var(--accent); }
+.journal-card:hover { box-shadow: 0 3px 16px rgba(0,0,0,.08); }
+.journal-card-cat {
+  font-size: 9px; font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted);
+}
+.journal-card-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 13px; line-height: 1.3; color: var(--text);
+}
+.journal-card-summary {
+  font-size: 12px; color: var(--muted); line-height: 1.6; flex: 1;
+}
+.journal-card-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 10px; color: var(--muted2);
+  border-top: 1px solid var(--border); padding-top: 7px; margin-top: 2px;
+}
+.journal-card-source { font-weight: 600; }
+.journal-card-link { color: var(--accent); text-decoration: none; font-weight: 700; }
+.journal-card-link:hover { text-decoration: underline; }
+.journal-hist { display: flex; flex-direction: column; gap: 6px; }
+.journal-hist-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px;
+  cursor: pointer; transition: all .12s;
+}
+.journal-hist-item:hover { border-color: var(--accent3); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.journal-hist-title { font-size: 13px; font-weight: 700; flex: 1; }
+.journal-hist-meta { font-size: 11px; color: var(--muted); }
+.journal-page-controls {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 0; border-top: 1px solid var(--border); margin-top: 8px;
+}
+.journal-page-btn {
+  padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 700;
+  border: 1.5px solid var(--border); background: var(--surface2);
+  cursor: pointer; transition: all .15s; color: var(--text);
+}
+.journal-page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.journal-page-btn:disabled { opacity: .4; cursor: default; }
+.journal-page-info { font-size: 12px; color: var(--muted); flex: 1; text-align: center; }
 
 .article-card {
   background: var(--surface);
@@ -1380,6 +1466,7 @@ body {
     <button class="header-tab active" onclick="switchTab('veille', this)">📰 Veille</button>
     <button class="header-tab" onclick="switchTab('dispositifs', this)">🗄 Dispositifs</button>
     <button class="header-tab" onclick="switchTab('cdc', this)">📋 Cahiers des charges</button>
+    <button class="header-tab" onclick="switchTab('journal', this)">📰 Journal</button>
     <button class="header-tab" onclick="switchTab('veille360', this)">🔍 Pré-veille 360°</button>
   </nav>
   <div class="header-search">
@@ -1492,6 +1579,51 @@ body {
       </div>
       <div class="cdc-list" id="cdc-list">
         <div class="spinner"></div>
+      </div>
+    </div>
+
+    <!-- PANEL JOURNAL -->
+    <div class="panel" id="panel-journal">
+      <div class="sort-row" style="flex-wrap:wrap;gap:8px;align-items:center;">
+        <span class="result-count" id="journal-count">— éditions</span>
+        <div style="flex:1"></div>
+        <button id="btn-gen-journal" onclick="generateJournal()"
+          style="padding:5px 16px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:var(--accent);color:var(--lime);white-space:nowrap;">
+          📰 Générer une édition
+        </button>
+      </div>
+      <!-- Vue journal courant -->
+      <div id="journal-current" style="display:none;">
+        <div class="journal-masthead">
+          <div>
+            <div class="journal-name">Sub<em>stan</em>Ciel</div>
+            <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:2px;">Journal de Veille</div>
+          </div>
+          <div class="journal-meta">
+            <div id="journal-edition-num" style="font-size:13px;font-weight:700;color:var(--text);">Édition #1</div>
+            <div id="journal-edition-date"></div>
+            <div id="journal-edition-count" style="font-size:10px;"></div>
+          </div>
+        </div>
+        <div class="journal-edition-label">
+          <span>Actualités de la veille — résumés éditoriaux</span>
+          <span id="journal-page-label">Page 1</span>
+        </div>
+        <div class="journal-grid" id="journal-grid"></div>
+        <div class="journal-page-controls">
+          <button class="journal-page-btn" id="journal-prev" onclick="journalChangePage(-1)">← Précédent</button>
+          <span class="journal-page-info" id="journal-page-info"></span>
+          <button class="journal-page-btn" id="journal-next" onclick="journalChangePage(1)">Suivant →</button>
+          <button onclick="saveJournal()" style="padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--accent);background:none;color:var(--accent);">💾 Sauvegarder</button>
+          <button onclick="closeJournalCurrent()" style="padding:5px 12px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--muted);">✕ Fermer</button>
+        </div>
+      </div>
+      <!-- Historique -->
+      <div id="journal-hist-section">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:8px 0 10px;">Historique des éditions</div>
+        <div class="journal-hist" id="journal-hist-list">
+          <div class="spinner"></div>
+        </div>
       </div>
     </div>
 
@@ -1629,10 +1761,158 @@ function collectFromVeille(e) {
     }
   }).catch(function(){ btn.innerHTML='⚠ Erreur réseau'; btn.disabled=false; });
 }
+// ── JOURNAL ───────────────────────────────────────────────────────────
+var journalSummaries = [];
+var journalPage = 0;
+var journalPageSize = 20;
+var journalCurrentId = null;
+
+async function loadJournalHistory() {
+  var list = document.getElementById('journal-hist-list');
+  try {
+    var res = await fetch(API + '/api/journal');
+    var editions = await res.json();
+    document.getElementById('journal-count').textContent = editions.length + ' edition' + (editions.length > 1 ? 's' : '');
+    if (!editions.length) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📰</div><div class="empty-state-title">Aucune édition</div><p>Générez votre première édition du journal.</p></div>';
+      return;
+    }
+    list.innerHTML = editions.map(function(e) {
+      var d = e.edition_date || e.created_at.slice(0,10);
+      return '<div class="journal-hist-item" onclick="loadJournalEdition(' + e.id + ')">' +
+        '<div style="font-size:22px;">📰</div>' +
+        '<div class="journal-hist-title">' + (e.title || 'Journal SubstanCiel') + '</div>' +
+        '<div class="journal-hist-meta">' + d + '</div>' +
+        '<button onclick="deleteJournalEdition(event,' + e.id + ')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:4px;">✕</button>' +
+        '</div>';
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Erreur</div></div>';
+  }
+}
+
+async function loadJournalEdition(id) {
+  try {
+    var res = await fetch(API + '/api/journal/' + id);
+    var data = await res.json();
+    var sums = Array.isArray(data.summaries) ? data.summaries : JSON.parse(data.summaries || '[]');
+    journalSummaries = sums;
+    journalPage = 0;
+    journalCurrentId = id;
+    var num = id;
+    document.getElementById('journal-edition-num').textContent = 'Edition #' + num;
+    document.getElementById('journal-edition-date').textContent = data.edition_date || data.created_at.slice(0,10);
+    document.getElementById('journal-edition-count').textContent = sums.length + ' articles résumés';
+    renderJournalPage();
+    document.getElementById('journal-current').style.display = 'block';
+    document.getElementById('journal-hist-section').style.display = 'none';
+  } catch(e) { showToast('Erreur chargement édition'); }
+}
+
+function renderJournalPage() {
+  var start = journalPage * journalPageSize;
+  var page  = journalSummaries.slice(start, start + journalPageSize);
+  var totalPages = Math.ceil(journalSummaries.length / journalPageSize);
+  document.getElementById('journal-page-label').textContent = 'Page ' + (journalPage + 1) + ' / ' + totalPages;
+  document.getElementById('journal-page-info').textContent = (start+1) + '-' + Math.min(start+journalPageSize, journalSummaries.length) + ' sur ' + journalSummaries.length;
+  document.getElementById('journal-prev').disabled = journalPage === 0;
+  document.getElementById('journal-next').disabled = journalPage >= totalPages - 1;
+  var grid = document.getElementById('journal-grid');
+  grid.innerHTML = page.map(function(s) {
+    var imp = s.importance === 'haute' ? ' haute' : '';
+    var dateStr = s.date ? s.date.slice(5).replace('-','/') : '';
+    return '<div class="journal-card' + imp + '">' +
+      '<div class="journal-card-cat">' + (s.category || 'Actualité') + '</div>' +
+      '<div class="journal-card-title">' + s.title + '</div>' +
+      '<div class="journal-card-summary">' + (s.summary || '') + '</div>' +
+      '<div class="journal-card-footer">' +
+        '<span class="journal-card-source">' + (s.source || '') + '</span>' +
+        '<span>' + dateStr + '</span>' +
+        (s.url ? '<a class="journal-card-link" href="' + encodeURI(s.url) + '" target="_blank" onclick="event.stopPropagation()">→</a>' : '') +
+      '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function journalChangePage(delta) {
+  var totalPages = Math.ceil(journalSummaries.length / journalPageSize);
+  journalPage = Math.max(0, Math.min(journalPage + delta, totalPages - 1));
+  renderJournalPage();
+  document.getElementById('journal-page-label').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+// Override journalPage function name conflict — rename onclick calls
+// The onclick uses journalPage(-1) — rename JS function
+function closeJournalCurrent() {
+  document.getElementById('journal-current').style.display = 'none';
+  document.getElementById('journal-hist-section').style.display = 'block';
+  journalCurrentId = null;
+}
+
+async function saveJournal() {
+  if (!journalSummaries.length) return;
+  var today = new Date().toLocaleDateString('fr-FR');
+  var title = 'Journal SubstanCiel — ' + today;
+  try {
+    var res = await fetch(API + '/api/journal', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title: title, summaries: journalSummaries})
+    });
+    var data = await res.json();
+    journalCurrentId = data.id;
+    showToast('Edition sauvegardée !');
+    loadJournalHistory();
+  } catch(e) { showToast('Erreur sauvegarde'); }
+}
+
+async function deleteJournalEdition(e, id) {
+  e.stopPropagation();
+  await fetch(API + '/api/journal/' + id, {method: 'DELETE'});
+  loadJournalHistory();
+}
+
+async function generateJournal() {
+  var btn = document.getElementById('btn-gen-journal');
+  btn.disabled = true; btn.textContent = '⏳ Génération...';
+  // Prendre les 24 dernières actualités
+  var acts = allArticles.filter(function(a) {
+    var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+    return tags.indexOf('⭐ Actualité') >= 0;
+  }).slice(0, 24);
+  if (!acts.length) {
+    showToast('Aucune actualité disponible'); btn.disabled=false; btn.textContent='📰 Générer une édition'; return;
+  }
+  try {
+    var res = await fetch(API + '/api/journal/summarize', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({articles: acts})
+    });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+    journalSummaries = data.summaries;
+    journalPage = 0;
+    journalCurrentId = null;
+    var today = new Date().toLocaleDateString('fr-FR');
+    document.getElementById('journal-edition-num').textContent = 'Nouvelle édition';
+    document.getElementById('journal-edition-date').textContent = today;
+    document.getElementById('journal-edition-count').textContent = journalSummaries.length + ' articles résumés';
+    renderJournalPage();
+    document.getElementById('journal-current').style.display = 'block';
+    document.getElementById('journal-hist-section').style.display = 'none';
+    showToast('Journal généré — pensez à sauvegarder !');
+  } catch(err) {
+    showToast('Erreur génération : ' + err.message);
+  }
+  btn.disabled=false; btn.textContent='📰 Générer une édition';
+}
+
 async function init() {
   buildSidebar();
   updateLockState();
   await Promise.all([loadArticles(), loadDispositifs()]);
+  loadJournalHistory();
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────────────
@@ -1826,13 +2106,15 @@ function renderCards(list, showCollect) {
 
     // Ligne d'actions : CDC + Collecter — PAS de lien imbriqué dans lien
     var actionsHTML = '';
-    if (hasCDC) {
-      actionsHTML += '<button class="abtn abtn-cdc" onclick="openCDC(this);event.stopPropagation();" data-url="'+encodeURI(a.pdf_url)+'">📋 CDC</button>';
-    } else {
-      actionsHTML += '<span class="abtn abtn-nocdc">📋 Pas de CDC</span>';
-    }
     if (showCollect) {
+      if (hasCDC) {
+        actionsHTML += '<button class="abtn abtn-cdc" onclick="openCDC(this);event.stopPropagation();" data-url="'+encodeURI(a.pdf_url)+'">📋 CDC</button>';
+      } else {
+        actionsHTML += '<span class="abtn abtn-nocdc">📋 Pas de CDC</span>';
+      }
       actionsHTML += '<button class="abtn abtn-collect'+(hasCDC?' abtn-collect-cdc':'')+'" data-url="'+encodeURIComponent(a.url||'')+'" data-title="'+encodeURIComponent(a.title||'')+'" data-id="'+(a.id||0)+'" data-pdf="'+encodeURIComponent(a.pdf_url||'')+'">💾 Collecter</button>';
+    } else {
+      actionsHTML += '<a class="abtn abtn-resume" href="'+encodeURI(a.url||'')+'" target="_blank" onclick="event.stopPropagation()">🔗 Lire</a>';
     }
 
     var card = '<div class="acard'+(isDisp?' acard-disp':'')+(hasCDC?' acard-cdc':'')+'">';
@@ -7220,6 +7502,65 @@ def delete_veille360_session(sid):
     cur.execute("DELETE FROM veille360_sessions WHERE id=%s", (sid,))
     conn.commit(); cur.close(); conn.close()
     return jsonify({'status': 'deleted'})
+
+@app.route('/api/journal', methods=['GET'])
+def get_journal_editions():
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT id, title, edition_date, created_at FROM journal_editions ORDER BY created_at DESC LIMIT 20")
+    rows = cur.fetchall(); cur.close(); conn.close()
+    return jsonify([{**dict(r), 'edition_date': str(r['edition_date']), 'created_at': r['created_at'].isoformat()} for r in rows])
+
+@app.route('/api/journal/<int:jid>', methods=['GET'])
+def get_journal_edition(jid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT * FROM journal_editions WHERE id=%s", (jid,))
+    row = cur.fetchone(); cur.close(); conn.close()
+    if not row: return jsonify({'error': 'not found'}), 404
+    d = dict(row); d['edition_date'] = str(d['edition_date']); d['created_at'] = d['created_at'].isoformat()
+    return jsonify(d)
+
+@app.route('/api/journal', methods=['POST'])
+def save_journal_edition():
+    data = request.get_json()
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("INSERT INTO journal_editions (title, summaries) VALUES (%s, %s) RETURNING id",
+        (data.get('title', 'Journal SubstanCiel'), json.dumps(data.get('summaries', []))))
+    new_id = cur.fetchone()['id']
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'id': new_id, 'status': 'saved'})
+
+@app.route('/api/journal/<int:jid>', methods=['DELETE'])
+def delete_journal_edition(jid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("DELETE FROM journal_editions WHERE id=%s", (jid,))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'status': 'deleted'})
+
+@app.route('/api/journal/summarize', methods=['POST'])
+def summarize_articles():
+    if not ANTHROPIC_API_KEY:
+        return jsonify({'error': 'ANTHROPIC_API_KEY not configured'}), 500
+    data = request.get_json()
+    articles_to_summarize = data.get('articles', [])
+    if not articles_to_summarize:
+        return jsonify({'error': 'No articles provided'}), 400
+    SUMMARIZE_PROMPT = "Tu es redacteur du Journal SubstanCiel. Pour chaque article, genere un resume flash en 2-3 phrases, style journalistique concis. Reponds UNIQUEMENT en JSON : {\"summary\": \"...\", \"category\": \"...\", \"importance\": \"haute|normale\"}"
+    summaries = []
+    for art in articles_to_summarize[:24]:
+        try:
+            user_content = "Titre : " + art.get('title','') + "\nSource : " + art.get('source','') + "\nResume : " + (art.get('summary','') or '')
+            payload = json.dumps({"model": "claude-haiku-4-5-20251001", "max_tokens": 200, "system": SUMMARIZE_PROMPT, "messages": [{"role": "user", "content": user_content}]}).encode()
+            req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={"Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01"}, method="POST")
+            with urlopen(req, timeout=15) as resp:
+                result = json.loads(resp.read())
+            text = result["content"][0]["text"].strip()
+            m = re.search(r'\{[\s\S]*\}', text)
+            parsed = json.loads(m.group() if m else text)
+            summaries.append({"title": art.get("title",""), "source": art.get("source",""), "url": art.get("url",""), "date": (art.get("scraped_at","") or "")[:10], "summary": parsed.get("summary",""), "category": parsed.get("category",""), "importance": parsed.get("importance","normale")})
+        except Exception:
+            summaries.append({"title": art.get("title",""), "source": art.get("source",""), "url": art.get("url",""), "date": (art.get("scraped_at","") or "")[:10], "summary": art.get("summary","") or "Resume non disponible.", "category": "", "importance": "normale"})
+    return jsonify({"summaries": summaries})
+
 
 @app.route('/api/folders', methods=['GET'])
 def api_get_folders():
