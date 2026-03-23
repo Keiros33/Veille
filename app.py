@@ -930,6 +930,12 @@ body {
 .header-tabs {
   display: flex; gap: 4px; margin-left: auto;
 }
+.header-tab-back {
+  opacity: 0.6; border-right: 1px solid var(--border);
+  margin-right: 4px; padding-right: 16px !important;
+  text-decoration: none;
+}
+.header-tab-back:hover { opacity: 1; color: var(--accent) !important; background: none !important; }
 .header-tab {
   padding: 6px 16px; border-radius: 100px;
   font-size: 12px; font-weight: 600;
@@ -1475,8 +1481,9 @@ body {
 <!-- HEADER -->
 <header class="header">
   <div class="header-logo">SubstanCiel</div>
-  <div class="header-tag">Espace Consultants</div>
+  <div class="header-tag">Espace Collecte</div>
   <nav class="header-tabs">
+    <a class="header-tab header-tab-back" href="/app" title="Retour à la curation">← Curation</a>
     <button class="header-tab active" onclick="switchTab('veille', this)">📰 Veille</button>
     <button class="header-tab" onclick="switchTab('dispositifs', this)">🗄 Dispositifs</button>
     <button class="header-tab" onclick="switchTab('cdc', this)">📋 Cahiers des charges</button>
