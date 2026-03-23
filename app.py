@@ -1579,6 +1579,11 @@ TAG_GROUPS.forEach(g => {
 
 // ── INIT ─────────────────────────────────────────────────────────────
 
+function openCDC(btn) {
+  var url = decodeURIComponent(btn.getAttribute('data-url') || '');
+  if (url) window.open(url, '_blank');
+}
+
 function collectFromVeille(e) {
   e.stopPropagation(); e.preventDefault();
   var btn = e.currentTarget;
@@ -1822,7 +1827,7 @@ function renderCards(list, showCollect) {
     // Ligne d'actions : CDC + Collecter — PAS de lien imbriqué dans lien
     var actionsHTML = '';
     if (hasCDC) {
-      actionsHTML += '<button class="abtn abtn-cdc" onclick="window.open(this.dataset.url,'_blank');event.stopPropagation();" data-url="'+encodeURI(a.pdf_url)+'">📋 CDC</button>';
+      actionsHTML += '<button class="abtn abtn-cdc" onclick="openCDC(this);event.stopPropagation();" data-url="'+encodeURI(a.pdf_url)+'">📋 CDC</button>';
     } else {
       actionsHTML += '<span class="abtn abtn-nocdc">📋 Pas de CDC</span>';
     }
