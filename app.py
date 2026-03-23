@@ -1789,7 +1789,8 @@ function renderArticleCards(list, showCollect) {
 
     var typeBadge = isDisp ? '<span class="article-tag ref">⭐ Dispositif</span>' : '<span class="article-tag">⭐ Actualité</span>';
     var tagsHtml  = subTags.map(function(t){ return '<span class="article-tag">'+t+'</span>'; }).join('');
-    var cdcBtn    = hasCDC ? '<a class="cdc-badge" href="'+safePdf+'" target="_blank" onclick="event.stopPropagation()">📋 CDC</a>' : '<span class="cdc-badge-missing">📋 Pas de CDC</span>';
+    var safePdfEncoded = encodeURI(a.pdf_url || '');
+    var cdcBtn    = hasCDC ? '<a class="cdc-badge" href="'+safePdfEncoded+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">📋 CDC</a>' : '<span class="cdc-badge-missing">📋 Pas de CDC</span>';
     var collectBtn = showCollect ? '<button class="btn-collect'+(hasCDC?' with-cdc':'')+'" data-url="'+safeUrl+'" data-title="'+safeTitle+'" data-id="'+(a.id||0)+'" data-pdf="'+safePdf+'" onclick="collectFromVeille(event)">💾 Collecter</button>' : '';
 
     var html  = '<a class="article-card'+(isDisp?' is-dispositif':'')+(hasCDC?' has-cdc':'')+'" href="'+a.url+'" target="_blank" rel="noopener">';
