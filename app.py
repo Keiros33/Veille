@@ -1908,7 +1908,7 @@ function collectFromVeille(e) {
   fetch(API + '/api/collect', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({url:url, title:title, id:artId, pdf_url:pdfUrl}),
+    body: JSON.stringify({url:url, title:title, id:parseInt(artId)||0, pdf_url:pdfUrl}),
     signal: ctrl.signal
   }).then(function(r) {
     clearTimeout(tid);
@@ -1919,7 +1919,9 @@ function collectFromVeille(e) {
       btn.innerHTML = '✓ Déjà collecté';
       btn.style.cssText='background:#e8f5b0;color:#3a6020;border-color:#3a6020';
     } else if (d.error) {
-      btn.innerHTML = '⚠ ' + (d.error.length < 40 ? d.error : 'Erreur'); btn.disabled=false;
+      btn.innerHTML = '⚠ ' + (d.error.length < 60 ? d.error : 'Erreur — voir console');
+      btn.disabled = false;
+      console.error('Collect error:', d.error);
     } else {
       // Sauvegarder dans la base
       return fetch(API+'/api/dispositifs',{
@@ -1930,8 +1932,12 @@ function collectFromVeille(e) {
           btn.innerHTML = '✓ Déjà collecté';
           btn.style.cssText='background:#e8f5b0;color:#3a6020;border-color:#3a6020';
         } else {
-          btn.innerHTML = '✅ Collecté !';
-          btn.style.cssText='background:var(--lime);color:var(--accent)';
+          btn.innerHTML = '<span class="abtn-collected">✓ Collecté</span>';
+          btn.style.cssText = '';
+          btn.className = 'abtn abtn-collected';
+          btn.disabled = true;
+          // Mettre à jour le Set en mémoire immédiatement
+          if (url) collectedUrls.add(url.toLowerCase());
           loadDispositifs();
           showToast('Dispositif ajouté à la base !');
         }
@@ -2273,10 +2279,14 @@ async function loadArticles() {
   }
 }
 
+var collectedUrls = new Set();
+
 async function loadDispositifs() {
   try {
-    const res = await fetch(API + '/api/dispositifs');
+    var res = await fetch(API + '/api/dispositifs');
     allDispositifs = await res.json();
+    // Construire le Set des URLs déjà collectées pour comparaison rapide
+    collectedUrls = new Set(allDispositifs.map(function(d){ return (d.source_url||'').toLowerCase(); }));
     document.getElementById('st-dispositifs').textContent = allDispositifs.length;
     renderDispositifs(allDispositifs);
   } catch(e) {}
@@ -2417,7 +2427,7 @@ function renderCards(list, showCollect) {
       } else {
         actionsHTML += '<span class="abtn abtn-nocdc">📋 Pas de CDC</span>';
       }
-      var alreadyCollected = allDispositifs.some(function(d){ return d.source_url === a.url || (d.titre && a.title && d.titre.toLowerCase() === a.title.toLowerCase()); });
+      var alreadyCollected = collectedUrls.has((a.url||'').toLowerCase());
       if (alreadyCollected) {
         actionsHTML += '<span class="abtn abtn-collected">✓ Collecté</span>';
       } else {
