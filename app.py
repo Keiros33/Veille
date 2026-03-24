@@ -1626,8 +1626,8 @@ body {
 
     <!-- STATS -->
     <div class="stats-row">
-      <div class="stat-chip"><div class="stat-chip-val" id="st-articles">—</div><div class="stat-chip-lbl">Articles</div></div>
-      <div class="stat-chip"><div class="stat-chip-val" id="st-dispositifs">—</div><div class="stat-chip-lbl">Dispositifs</div></div>
+      <div class="stat-chip"><div class="stat-chip-val" id="st-articles">—</div><div class="stat-chip-lbl">Articles taggés</div></div>
+      <div class="stat-chip"><div class="stat-chip-val" id="st-dispositifs">—</div><div class="stat-chip-lbl">Dispositifs collectés</div></div>
       <div class="stat-chip"><div class="stat-chip-val" id="st-cdc">—</div><div class="stat-chip-lbl">Cahiers</div></div>
       <div class="stat-chip"><div class="stat-chip-val" id="st-today">—</div><div class="stat-chip-lbl">Aujourd'hui</div></div>
     </div>
@@ -1636,6 +1636,7 @@ body {
     <div class="panel active" id="panel-veille">
       <!-- Ligne 1 : filtres de type -->
       <div class="vf-row">
+        <button onclick="loadArticles()" class="disp-refresh-btn" title="Rafraîchir la veille">↺</button>
         <div class="vf-btns">
           <button class="vf-btn active" id="vft-all"  onclick="setViewFilter('all',  this)">Tout</button>
           <button class="vf-btn"        id="vft-actu" onclick="setViewFilter('actu', this)">📰 Actualités</button>
@@ -2302,7 +2303,8 @@ async function loadDispositifs() {
 }
 
 function updateStats() {
-  document.getElementById('st-articles').textContent = allArticles.length;
+  var taggedCount = allArticles.filter(function(a){ var t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.length>0 && !(t.length===1 && t[0]===''); }).length;
+  document.getElementById('st-articles').textContent = taggedCount;
   const today = new Date().toDateString();
   const todayCount = allArticles.filter(a => new Date(a.scraped_at).toDateString() === today).length;
   document.getElementById('st-today').textContent = todayCount;
