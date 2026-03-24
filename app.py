@@ -606,11 +606,11 @@ RÈGLES STRICTES :
 - Aucune déduction ni hypothèse
 - LONGUEURS MAXIMALES STRICTES (rendu PowerPoint — ne jamais dépasser) :
   * objectif : 180 caractères max — 1 phrase synthétique
-  * operations_eligibles : 250 caractères max — liste concise
-  * depenses_eligibles : 250 caractères max — liste concise
+  * operations_eligibles : 400 caractères max — lister toutes les opérations éligibles
+  * depenses_eligibles : 450 caractères max — lister tous les postes de dépenses couverts
   * criteres_eligibilite : 350 caractères max — conditions clés uniquement
-  * montants_taux : 220 caractères max — montant + taux en une ligne si possible
-  * points_vigilance : 220 caractères max — 2-3 points MAX, séparés par " | "
+  * montants_taux : 380 caractères max — détailler montants min/max, taux, plafonds
+  * points_vigilance : 400 caractères max — 3-4 points MAX, séparés par " | "
   * Si le contenu dépasse : résume brutalement, supprime les détails secondaires
   * Pour les listes : utiliser " | " comme séparateur, PAS de tirets ni de puces
 - Réponse UNIQUEMENT en JSON valide avec ces clés exactes :
