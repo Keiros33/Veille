@@ -730,15 +730,60 @@ def generate_dispositif_pptx(data):
     ]
 
     def fetch_logo_bytes(guichet_name):
-        """Return (image_bytes, 'png') from embedded LOGO_B64, or (None, None)."""
-        import unicodedata
+        """Essaie Clearbit Logo API, fallback sur PNG embarqué."""""
+        import unicodedata, base64 as b64mod2
+
         nl = unicodedata.normalize('NFD', (guichet_name or '').lower())
         nl = ''.join(c for c in nl if unicodedata.category(c) != 'Mn')
+
+        # Trouver la clé interne
+        matched_key = None
         for keywords, key in LOGO_KEYS:
             if any(kw in nl for kw in keywords):
-                if key in LOGO_B64:
-                    import base64 as b64mod2
-                    return b64mod2.b64decode(LOGO_B64[key]), 'png'
+                matched_key = key
+                break
+
+        # ── Tentative 1 : Clearbit Logo API (logo officiel HD) ──────────
+        # Deviner le domaine depuis la clé ou le nom
+        DOMAIN_MAP = {
+            'ademe': 'ademe.fr', 'bpifrance': 'bpifrance.fr',
+            'anah': 'anah.fr', 'anct': 'anct.gouv.fr',
+            'cerema': 'cerema.fr', 'banque_territoires': 'banquedesterritoires.fr',
+            'caisse_depots': 'caissedesdepots.fr', 'france_2030': 'gouvernement.fr',
+            'anr': 'anr.fr', 'dreal': 'ecologie.gouv.fr',
+            'dreets': 'travail.gouv.fr', 'direccte': 'travail.gouv.fr',
+            'carsat': 'carsat.fr', 'urssaf': 'urssaf.fr', 'msa': 'msa.fr',
+            'feader': 'europe-en-france.gouv.fr', 'feder': 'europe-en-france.gouv.fr',
+            'fse': 'europe-en-france.gouv.fr', 'europe': 'europa.eu',
+            'aura': 'auvergnerhonealpes.fr', 'bretagne': 'bretagne.bzh',
+            'normandie': 'normandie.fr', 'occitanie': 'laregion.fr',
+            'nouvelle_aquitaine': 'nouvelle-aquitaine.fr', 'grand_est': 'grandest.fr',
+            'hauts_france': 'hautsdefrance.fr', 'ile_france': 'iledefrance.fr',
+            'paca': 'maregionsud.fr', 'pays_loire': 'paysdelaloire.fr',
+            'bourgogne_fc': 'bourgognefranchecomte.fr', 'centre_val': 'centre-valdeloire.fr',
+            'corse': 'isula.corsica', 'guadeloupe': 'regionguadeloupe.fr',
+            'martinique': 'martinique.fr', 'reunion': 'regionreunion.com',
+            'mayotte': 'mayotte.fr', 'guyane': 'guyane.fr',
+        }
+        if matched_key and matched_key in DOMAIN_MAP:
+            domain = DOMAIN_MAP[matched_key]
+            try:
+                clearbit_url = f'https://logo.clearbit.com/{domain}?size=128'
+                req_cb = ureq.Request(clearbit_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with ureq.urlopen(req_cb, timeout=5) as resp_cb:
+                    data = resp_cb.read()
+                    ct = resp_cb.headers.get('content-type', '')
+                    # Clearbit retourne une image SVG/PNG valide si le logo existe
+                    if len(data) > 500 and ('image' in ct or data[:4] in (b'\x89PNG', b'<svg', b'GIF8', b'\xff\xd8')):
+                        ext = 'png' if b'\x89PNG' in data[:8] else ('svg+xml' if b'<svg' in data[:100] else 'jpeg')
+                        return data, 'png' if ext == 'svg+xml' else ext
+            except Exception:
+                pass  # Timeout ou domaine inconnu → fallback
+
+        # ── Tentative 2 : PNG embarqué (toujours disponible) ────────────
+        if matched_key and matched_key in LOGO_B64:
+            return b64mod2.b64decode(LOGO_B64[matched_key]), 'png'
+
         return None, None
 
     def add_logo_image(slide, logo_textbox_id, img_bytes, ext):
@@ -1391,9 +1436,11 @@ body {
   background:var(--accent); color:var(--lime); border:none;
   font-size:16px; font-weight:700; cursor:pointer;
   display:flex; align-items:center; justify-content:center;
-  transition:all .2s;
+  transition:transform .4s ease;
 }
-.disp-refresh-btn:hover { transform:rotate(180deg); opacity:.85; }
+.disp-refresh-btn:hover { opacity:.85; }
+.disp-refresh-btn.spinning { animation: spin-once .5s ease forwards; }
+@keyframes spin-once { to { transform: rotate(360deg); } }
 .disp-view-toggle { display:flex; gap:4px; background:var(--surface2); border-radius:8px; padding:3px; border:1px solid var(--border); flex-shrink:0; }
 .dv-btn { padding:5px 14px; border-radius:6px; font-size:11px; font-weight:700; border:none; background:none; color:var(--muted); cursor:pointer; transition:all .15s; white-space:nowrap; }
 .dv-btn.active { background:var(--surface); color:var(--accent); box-shadow:0 1px 4px rgba(0,0,0,.08); }
@@ -1636,7 +1683,7 @@ body {
     <div class="panel active" id="panel-veille">
       <!-- Ligne 1 : filtres de type -->
       <div class="vf-row">
-        <button onclick="loadArticles()" class="disp-refresh-btn" title="Rafraîchir la veille">↺</button>
+        <button onclick="refreshVeille()" class="disp-refresh-btn" title="Rafraîchir la veille">↺</button>
         <div class="vf-btns">
           <button class="vf-btn active" id="vft-all"  onclick="setViewFilter('all',  this)">Tout</button>
           <button class="vf-btn"        id="vft-actu" onclick="setViewFilter('actu', this)">📰 Actualités</button>
@@ -1683,7 +1730,7 @@ body {
     <div class="panel" id="panel-dispositifs">
       <!-- Barre de contrôles -->
       <div class="disp-controls">
-        <button onclick="loadDispositifs()" class="disp-refresh-btn" title="Rafraîchir les dispositifs">↺</button>
+        <button onclick="refreshDispositifs()" class="disp-refresh-btn" title="Rafraîchir les dispositifs">↺</button>
         <div class="disp-view-toggle">
           <button class="dv-btn active" id="dv-cards" onclick="setDispView('cards', this)">🗂 Bibliothèque</button>
           <button class="dv-btn"        id="dv-table" onclick="setDispView('table', this)">📊 Base de données</button>
@@ -2216,6 +2263,17 @@ function addToJournalSelection(btn) {
   else if (genBtn) genBtn.textContent = '📰 Générer';
 }
 
+function refreshVeille() {
+  var btn = document.querySelector('#panel-veille .disp-refresh-btn');
+  if (btn) { btn.classList.add('spinning'); setTimeout(function(){ btn.classList.remove('spinning'); }, 500); }
+  loadArticles();
+}
+function refreshDispositifs() {
+  var btn = document.querySelector('#panel-dispositifs .disp-refresh-btn');
+  if (btn) { btn.classList.add('spinning'); setTimeout(function(){ btn.classList.remove('spinning'); }, 500); }
+  loadDispositifs();
+}
+
 async function init() {
   buildSidebar();
   updateLockState();
@@ -2542,6 +2600,11 @@ function filterDispositifs() {
       var va = (a[dispSortCol] || '').toLowerCase();
       var vb = (b[dispSortCol] || '').toLowerCase();
       return va < vb ? -dispSortDir : va > vb ? dispSortDir : 0;
+    });
+  } else {
+    // Tri par défaut : plus récemment collecté en premier
+    list = list.slice().sort(function(a, b) {
+      return new Date(b.collected_at||0) - new Date(a.collected_at||0);
     });
   }
 
