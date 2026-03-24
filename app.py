@@ -1204,6 +1204,10 @@ body {
 .abtn-collect-cdc { background:rgba(26,60,46,.08); border-color:var(--accent3); color:var(--accent); }
 .abtn-resume { background:var(--surface2); color:var(--muted); border:1px solid var(--border); font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;text-decoration:none; }
 .abtn-resume:hover { background:var(--surface); color:var(--accent); }
+.abtn-collected { background:rgba(62,207,122,.1); color:#1a7a40; border:1px solid rgba(62,207,122,.3); font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;cursor:default; }
+.abtn-journal { background:var(--surface2); color:var(--muted); border:1px solid var(--border); font-size:13px;padding:3px 8px;border-radius:6px;cursor:pointer; }
+.abtn-journal:hover { background:rgba(26,60,46,.08); color:var(--accent); border-color:var(--accent); }
+.abtn-journal.added { background:rgba(26,60,46,.1); color:var(--accent); border-color:var(--accent); }
 
 /* ── JOURNAL DA ───────────────────────────────────────────────────── */
 .journal-masthead {
@@ -2128,15 +2132,25 @@ async function generateJournal() {
   var btn = document.getElementById('btn-gen-journal');
   btn.disabled = true; btn.textContent = '⏳ Génération...';
 
-  var periodDays = parseInt(document.getElementById('journal-period').value) || 0;
-  var cutoff = periodDays > 0 ? new Date(Date.now() - periodDays * 86400000) : null;
-
-  var acts = allArticles.filter(function(a) {
-    var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
-    if (tags.indexOf('⭐ Actualité') < 0) return false;
-    if (cutoff && a.scraped_at && new Date(a.scraped_at) < cutoff) return false;
-    return true;
-  }).slice(0, 24);
+  var acts;
+  if (journalManualIds.size > 0) {
+    // Utiliser la sélection manuelle (boutons 📰 cliqués)
+    acts = allArticles.filter(function(a){ return journalManualIds.has(a.id); }).slice(0, 24);
+    journalManualIds.clear();
+    document.querySelectorAll('.abtn-journal.added').forEach(function(b){ b.classList.remove('added'); b.title='Ajouter au prochain journal'; });
+    var genBtn = document.getElementById('btn-gen-journal');
+    if (genBtn) genBtn.textContent = '📰 Générer';
+  } else {
+    // Filtrer par période
+    var periodDays = parseInt(document.getElementById('journal-period').value) || 0;
+    var cutoff = periodDays > 0 ? new Date(Date.now() - periodDays * 86400000) : null;
+    acts = allArticles.filter(function(a) {
+      var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+      if (tags.indexOf('⭐ Actualité') < 0) return false;
+      if (cutoff && a.scraped_at && new Date(a.scraped_at) < cutoff) return false;
+      return true;
+    }).slice(0, 24);
+  }
 
   if (!acts.length) {
     showToast('Aucune actualité disponible'); btn.disabled=false; btn.textContent='📰 Générer une édition'; return;
@@ -2164,6 +2178,26 @@ async function generateJournal() {
     showToast('Erreur génération : ' + err.message);
   }
   btn.disabled=false; btn.textContent='📰 Générer une édition';
+}
+
+// Sélection manuelle pour le journal
+var journalManualIds = new Set();
+function addToJournalSelection(btn) {
+  var id = parseInt(btn.getAttribute('data-id'));
+  if (journalManualIds.has(id)) {
+    journalManualIds.delete(id);
+    btn.classList.remove('added');
+    btn.title = 'Ajouter au prochain journal';
+  } else {
+    journalManualIds.add(id);
+    btn.classList.add('added');
+    btn.title = 'Retirer du journal';
+  }
+  // Mettre à jour le compteur sur le bouton générer
+  var count = journalManualIds.size;
+  var genBtn = document.getElementById('btn-gen-journal');
+  if (genBtn && count > 0) genBtn.textContent = '📰 Générer (' + count + ' sélectionnés)';
+  else if (genBtn) genBtn.textContent = '📰 Générer';
 }
 
 async function init() {
@@ -2355,7 +2389,7 @@ function renderArticles(list) {
   }
   container.innerHTML = html;
   // Attacher les events après injection
-  container.querySelectorAll('.btn-collect').forEach(function(btn){
+  container.querySelectorAll('.abtn-collect').forEach(function(btn){
     btn.addEventListener('click', collectFromVeille);
   });
   container.querySelectorAll('.card-title-link').forEach(function(a){
@@ -2383,9 +2417,17 @@ function renderCards(list, showCollect) {
       } else {
         actionsHTML += '<span class="abtn abtn-nocdc">📋 Pas de CDC</span>';
       }
-      actionsHTML += '<button class="abtn abtn-collect'+(hasCDC?' abtn-collect-cdc':'')+'" data-url="'+encodeURIComponent(a.url||'')+'" data-title="'+encodeURIComponent(a.title||'')+'" data-id="'+(a.id||0)+'" data-pdf="'+encodeURIComponent(a.pdf_url||'')+'">💾 Collecter</button>';
+      var alreadyCollected = allDispositifs.some(function(d){ return d.source_url === a.url || (d.titre && a.title && d.titre.toLowerCase() === a.title.toLowerCase()); });
+      if (alreadyCollected) {
+        actionsHTML += '<span class="abtn abtn-collected">✓ Collecté</span>';
+      } else {
+        actionsHTML += '<button class="abtn abtn-collect'+(hasCDC?' abtn-collect-cdc':'')+'" data-url="'+encodeURIComponent(a.url||'')+'" data-title="'+encodeURIComponent(a.title||'')+'" data-id="'+(a.id||0)+'" data-pdf="'+encodeURIComponent(a.pdf_url||'')+'">💾 Collecter</button>';
+      }
     } else {
-      actionsHTML += '<a class="abtn abtn-resume" href="'+encodeURI(a.url||'')+'" target="_blank" onclick="event.stopPropagation()">🔗 Lire</a>';
+      // Bouton Lire + Ajouter au Journal
+      var safeArticleUrl = (a.url||'').replace(/"/g,'&quot;');
+      actionsHTML += '<a class="abtn abtn-resume" href="'+safeArticleUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 Lire</a>';
+      actionsHTML += '<button class="abtn abtn-journal" onclick="addToJournalSelection(this);event.stopPropagation();" data-id="'+(a.id||0)+'" title="Ajouter au prochain journal">📰</button>';
     }
 
     var card = '<div class="acard'+(isDisp?' acard-disp':'')+(hasCDC?' acard-cdc':'')+'">';
