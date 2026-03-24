@@ -8408,7 +8408,7 @@ def collect_dispositif():
         except Exception as e:
             log.warning(f"CDC fetch error {pdf_url}: {e}")
 
-    # Priorite 2 : page HTML (timeout 10s)
+    # Priorite 2 : page HTML (timeout 10s) — extraction intelligente du contenu utile
     if not page_text:
         try:
             req_html = Request(url, headers={
@@ -8416,9 +8416,29 @@ def collect_dispositif():
                 'Accept-Language':'fr-FR,fr;q=0.9',
             })
             with urlopen(req_html, timeout=10) as resp_html:
-                raw_html = resp_html.read(150000).decode('utf-8', errors='ignore')
-            page_text = re.sub(r'<[^>]+>', ' ', raw_html)
-            page_text = re.sub(r'\s+', ' ', page_text).strip()[:6000]
+                raw_html = resp_html.read(200000).decode('utf-8', errors='ignore')
+
+            # Supprimer scripts, styles, nav, footer (bruit)
+            NOISE_PAT = re.compile('<(script|style|nav|header|footer|aside)[^>]*>.*?</(script|style|nav|header|footer|aside)>', re.IGNORECASE|re.DOTALL)
+            clean = NOISE_PAT.sub(' ', raw_html)
+
+            # Essayer d'extraire la zone de contenu principal
+            CONTENT_PAT = re.compile('<(main|article|section|div)[^>]*(content|main|article|body|dispositif|fiche|detail|description)[^>]*>(.*?)</(main|article|section|div)>', re.IGNORECASE|re.DOTALL)
+            main_match = CONTENT_PAT.search(clean)
+            if main_match:
+                zone = main_match.group(3)
+            else:
+                zone = clean  # fallback : tout le HTML nettoyé
+
+            # Strip tags restants
+            text = re.sub(r'<[^>]+>', ' ', zone)
+            text = re.sub(r'\s+', ' ', text).strip()
+
+            # Garder 8000 chars — sauter les 500 premiers (souvent menu/breadcrumb)
+            if len(text) > 500:
+                text = text[500:]
+            page_text = text[:8000]
+
         except Exception as e:
             log.warning(f"Fetch error {url}: {e}")
             page_text = f"Titre : {title}\nURL : {url}\n(Contenu non accessible)"
@@ -8429,7 +8449,7 @@ def collect_dispositif():
         user_content = f"Analyse ce dispositif et remplis la grille.{cdc_mention}\n\nTitre : {title}\nURL : {url}\n[Source : {source_used}]\n\nContenu :\n{page_text}"
         payload = json.dumps({
             "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 1500,
+            "max_tokens": 2000,
             "system": COLLECT_PROMPT,
             "messages": [{"role":"user","content":user_content}]
         }).encode()
