@@ -1386,6 +1386,14 @@ body {
 
 /* Contrôles dispositifs */
 .disp-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.disp-refresh-btn {
+  width:32px; height:32px; border-radius:50%; flex-shrink:0;
+  background:var(--accent); color:var(--lime); border:none;
+  font-size:16px; font-weight:700; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .2s;
+}
+.disp-refresh-btn:hover { transform:rotate(180deg); opacity:.85; }
 .disp-view-toggle { display:flex; gap:4px; background:var(--surface2); border-radius:8px; padding:3px; border:1px solid var(--border); flex-shrink:0; }
 .dv-btn { padding:5px 14px; border-radius:6px; font-size:11px; font-weight:700; border:none; background:none; color:var(--muted); cursor:pointer; transition:all .15s; white-space:nowrap; }
 .dv-btn.active { background:var(--surface); color:var(--accent); box-shadow:0 1px 4px rgba(0,0,0,.08); }
@@ -1674,6 +1682,7 @@ body {
     <div class="panel" id="panel-dispositifs">
       <!-- Barre de contrôles -->
       <div class="disp-controls">
+        <button onclick="loadDispositifs()" class="disp-refresh-btn" title="Rafraîchir les dispositifs">↺</button>
         <div class="disp-view-toggle">
           <button class="dv-btn active" id="dv-cards" onclick="setDispView('cards', this)">🗂 Bibliothèque</button>
           <button class="dv-btn"        id="dv-table" onclick="setDispView('table', this)">📊 Base de données</button>
@@ -2727,6 +2736,7 @@ function switchTab(tab, btn) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
   if (tab === 'veille360') loadV360Sessions();
+  if (tab === 'dispositifs') loadDispositifs();
 }
 
 // ── PRÉ-VEILLE 360° ───────────────────────────────────────────────────
