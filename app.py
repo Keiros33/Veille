@@ -273,11 +273,7 @@ def init_db():
         created_at TIMESTAMP DEFAULT NOW()
     )""")
     cur.execute("CREATE TABLE IF NOT EXISTS journal_editions (id SERIAL PRIMARY KEY, title TEXT NOT NULL, edition_date DATE DEFAULT CURRENT_DATE, summaries JSONB NOT NULL DEFAULT '[]', created_at TIMESTAMP DEFAULT NOW())")
-    cur.execute("CREATE TABLE IF NOT EXISTS projet_dispositifs (id SERIAL PRIMARY KEY, session_id INTEGER NOT NULL, titre TEXT, guichet_financeur TEXT, nature TEXT, beneficiaire TEXT, territoire TEXT, type_depot TEXT, date_fermeture TEXT, montants_taux TEXT, objectif TEXT, operations_eligibles TEXT, depenses_eligibles TEXT, criteres_eligibilite TEXT, points_vigilance TEXT, contact TEXT, source_url TEXT, statut TEXT DEFAULT 'identifie', notes TEXT DEFAULT '', created_at TIMESTAMP DEFAULT NOW())")
-    try:
-        cur.execute("ALTER TABLE veille360_sessions ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''")
-    except Exception:
-        pass
+
     conn.commit(); cur.close(); conn.close()
     log.info("DB ready")
 
@@ -1712,7 +1708,7 @@ body {
     <button class="header-tab" onclick="switchTab('dispositifs', this)">🗄 Dispositifs</button>
     <button class="header-tab" onclick="switchTab('cdc', this)">📋 Cahiers des charges</button>
     <button class="header-tab" onclick="switchTab('journal', this)">📰 Journal</button>
-    <button class="header-tab" onclick="switchTab('veille360', this)">🎯 Studio Financement</button>
+    <button class="header-tab" onclick="switchTab('veille360', this)">🔍 Pré-veille 360°</button>
   </nav>
   <div class="header-search">
     <span class="header-search-icon">🔍</span>
@@ -1875,6 +1871,80 @@ body {
       </div>
     </div>
 
+    <!-- PANEL JOURNAL -->
+    <div class="panel" id="panel-journal">
+      <div class="sort-row" style="flex-wrap:wrap;gap:8px;align-items:center;">
+        <span class="result-count" id="journal-count">— éditions</span>
+        <div style="flex:1"></div>
+        <select id="journal-period" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text);outline:none;cursor:pointer;">
+          <option value="7">7 derniers jours</option>
+          <option value="14">14 derniers jours</option>
+          <option value="30" selected>30 derniers jours</option>
+          <option value="0">Tous les articles visibles</option>
+        </select>
+        <button id="btn-gen-journal" onclick="generateJournal()"
+          style="padding:5px 16px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:var(--accent);color:var(--lime);white-space:nowrap;">
+          📰 Générer
+        </button>
+      </div>
+      <!-- Vue journal courant -->
+      <div id="journal-current" style="display:none;">
+        <div class="journal-masthead">
+          <div>
+            <div class="journal-name">Sub<em>stan</em>Ciel</div>
+            <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:2px;">Journal de Veille</div>
+          </div>
+          <div class="journal-meta">
+            <div id="journal-edition-num" style="font-size:13px;font-weight:700;color:var(--text);">Édition #1</div>
+            <div id="journal-edition-date"></div>
+            <div id="journal-edition-count" style="font-size:10px;"></div>
+          </div>
+        </div>
+        <div class="journal-edition-label">
+          <span>Actualités de la veille — résumés éditoriaux</span>
+          <span id="journal-page-label">Page 1</span>
+        </div>
+        <div class="journal-grid" id="journal-grid"></div>
+        <div class="journal-page-controls">
+          <button class="journal-page-btn" id="journal-prev" onclick="journalChangePage(-1)">← Précédent</button>
+          <span class="journal-page-info" id="journal-page-info"></span>
+          <button class="journal-page-btn" id="journal-next" onclick="journalChangePage(1)">Suivant →</button>
+          <button onclick="saveJournal()" style="padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--accent);background:none;color:var(--accent);">💾 Sauvegarder</button>
+          <button onclick="exportJournalHTML()" style="padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:var(--surface2);color:var(--muted);">⬇ HTML</button>
+          <button onclick="exportJournalPDF()" style="padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:var(--surface2);color:var(--muted);">🖨 PDF</button>
+          <button onclick="closeJournalCurrent()" style="padding:5px 12px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--muted);">✕ Fermer</button>
+        </div>
+      </div>
+      <!-- Historique -->
+      <div id="journal-hist-section">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:8px 0 10px;">Historique des éditions</div>
+        <div class="journal-hist" id="journal-hist-list">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL PRÉ-VEILLE 360° -->
+    <div class="panel" id="panel-veille360">
+      <div class="sort-row" style="flex-wrap:wrap;gap:8px;">
+        <span class="result-count" id="v360-sessions-count">— analyses</span>
+        <input id="v360-client-input" placeholder="Nom du client / dossier…"
+          style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text);outline:none;min-width:160px;flex:1;">
+        <button onclick="runV360()" id="v360-run-btn"
+          style="padding:5px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:var(--accent);color:var(--lime);">
+          🔍 Lancer une analyse
+        </button>
+      </div>
+      <div id="v360-form" style="padding:10px 0 4px;display:flex;flex-direction:column;gap:8px;">
+        <textarea id="v360-project" placeholder="Décrivez le projet CAPEX du client : porteur, nature des travaux, localisation, montant estimé, contexte…"
+          style="width:100%;min-height:90px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:12px;resize:vertical;font-family:inherit;box-sizing:border-box;"></textarea>
+        <div id="v360-status-inline" style="font-size:11px;color:var(--muted);min-height:16px;"></div>
+      </div>
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:8px 0 6px;">Historique des analyses</div>
+      <div id="v360-sessions-list" style="display:flex;flex-direction:column;gap:6px;">
+        <div class="spinner"></div>
+      </div>
+    </div>
     <!-- PANEL JOURNAL -->
     <div class="panel" id="panel-journal">
       <div class="sort-row" style="flex-wrap:wrap;gap:8px;align-items:center;">
@@ -2148,6 +2218,885 @@ function collectFromVeille(e) {
     }
   }).catch(function(){ btn.innerHTML='⚠ Erreur réseau'; btn.disabled=false; });
 }
+// ── JOURNAL ───────────────────────────────────────────────────────────
+var journalSummaries = [];
+var journalPage = 0;
+var journalPageSize = 20;
+var journalCurrentId = null;
+
+async function loadJournalHistory() {
+  var list = document.getElementById('journal-hist-list');
+  try {
+    var res = await fetch(API + '/api/journal');
+    var editions = await res.json();
+    document.getElementById('journal-count').textContent = editions.length + ' edition' + (editions.length > 1 ? 's' : '');
+    if (!editions.length) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📰</div><div class="empty-state-title">Aucune édition</div><p>Générez votre première édition du journal.</p></div>';
+      return;
+    }
+    list.innerHTML = editions.map(function(e) {
+      var d = e.edition_date || e.created_at.slice(0,10);
+      return '<div class="journal-hist-item" data-jid="' + e.id + '" onclick="loadJournalEditionById(this)">' +
+        '<div style="font-size:22px;">📰</div>' +
+        '<div class="journal-hist-title">' + (e.title || 'Journal SubstanCiel') + '</div>' +
+        '<div class="journal-hist-meta">' + d + '</div>' +
+        '<button data-jid="' + e.id + '" onclick="deleteJournalEditionById(event,this)" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:4px;">✕</button>' +
+        '</div>';
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Erreur</div></div>';
+  }
+}
+
+async function loadJournalEdition(id) {
+  try {
+    var res = await fetch(API + '/api/journal/' + id);
+    var data = await res.json();
+    var sums = Array.isArray(data.summaries) ? data.summaries : JSON.parse(data.summaries || '[]');
+    journalSummaries = sums;
+    journalPage = 0;
+    journalCurrentId = id;
+    var num = id;
+    document.getElementById('journal-edition-num').textContent = 'Edition #' + num;
+    document.getElementById('journal-edition-date').textContent = data.edition_date || data.created_at.slice(0,10);
+    document.getElementById('journal-edition-count').textContent = sums.length + ' articles résumés';
+    renderJournalPage();
+    document.getElementById('journal-current').style.display = 'block';
+    document.getElementById('journal-hist-section').style.display = 'none';
+  } catch(e) { showToast('Erreur chargement édition'); }
+}
+
+function renderJournalPage() {
+  var start = journalPage * journalPageSize;
+  var page  = journalSummaries.slice(start, start + journalPageSize);
+  var totalPages = Math.ceil(journalSummaries.length / journalPageSize);
+  document.getElementById('journal-page-label').textContent = 'Page ' + (journalPage + 1) + ' / ' + totalPages;
+  document.getElementById('journal-page-info').textContent = (start+1) + '-' + Math.min(start+journalPageSize, journalSummaries.length) + ' sur ' + journalSummaries.length;
+  document.getElementById('journal-prev').disabled = journalPage === 0;
+  document.getElementById('journal-next').disabled = journalPage >= totalPages - 1;
+  var grid = document.getElementById('journal-grid');
+  grid.innerHTML = page.map(function(s) {
+    var imp = s.importance === 'haute' ? ' haute' : '';
+    var dateStr = s.date ? s.date.slice(5).replace('-','/') : '';
+    return '<div class="journal-card' + imp + '">' +
+      '<div class="journal-card-cat">' + (s.category || 'Actualité') + '</div>' +
+      '<div class="journal-card-title">' + s.title + '</div>' +
+      '<div class="journal-card-summary">' + (s.summary || '') + '</div>' +
+      '<div class="journal-card-footer">' +
+        '<span class="journal-card-source">' + (s.source || '') + '</span>' +
+        '<span>' + dateStr + '</span>' +
+        (s.url ? '<a class="journal-card-link" href="' + encodeURI(s.url) + '" target="_blank" onclick="event.stopPropagation()">→</a>' : '') +
+      '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function journalChangePage(delta) {
+  var totalPages = Math.ceil(journalSummaries.length / journalPageSize);
+  journalPage = Math.max(0, Math.min(journalPage + delta, totalPages - 1));
+  renderJournalPage();
+  document.getElementById('journal-page-label').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+// Override journalPage function name conflict — rename onclick calls
+// The onclick uses journalPage(-1) — rename JS function
+function closeJournalCurrent() {
+  document.getElementById('journal-current').style.display = 'none';
+  document.getElementById('journal-hist-section').style.display = 'block';
+  journalCurrentId = null;
+}
+
+async function saveJournal() {
+  if (!journalSummaries.length) return;
+  var today = new Date().toLocaleDateString('fr-FR');
+  var title = 'Journal SubstanCiel — ' + today;
+  try {
+    var res = await fetch(API + '/api/journal', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title: title, summaries: journalSummaries})
+    });
+    var data = await res.json();
+    journalCurrentId = data.id;
+    showToast('Edition sauvegardée !');
+    loadJournalHistory();
+  } catch(e) { showToast('Erreur sauvegarde'); }
+}
+
+async function deleteJournalEdition(e, id) {
+  e.stopPropagation();
+  await fetch(API + '/api/journal/' + id, {method: 'DELETE'});
+  loadJournalHistory();
+}
+
+function exportJournalHTML() {
+  if (!journalSummaries.length) { showToast('Aucune edition a exporter'); return; }
+  var today = new Date().toLocaleDateString('fr-FR');
+  var edNum = document.getElementById('journal-edition-num').textContent;
+  var cards = journalSummaries.map(function(s) {
+    var imp = s.importance === 'haute' ? 'border-top:3px solid #1a3c2e;' : 'border-top:3px solid #ddd;';
+    var dateStr = s.date ? s.date.slice(5).replace('-','/') : '';
+    return '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;break-inside:avoid;' + imp + '">' +
+      '<div style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#888;">' + (s.category || 'Actualite') + '</div>' +
+      '<div style="font-family:Georgia,serif;font-weight:700;font-size:13px;line-height:1.3;color:#111;">' + s.title + '</div>' +
+      '<div style="font-size:12px;color:#444;line-height:1.65;flex:1;">' + (s.summary || '') + '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:6px;margin-top:4px;">' +
+        '<span style="font-weight:600;">' + (s.source||'') + '</span>' +
+        '<span>' + dateStr + '</span>' +
+        (s.url ? '<a href="' + s.url + '" style="color:#1a3c2e;font-weight:700;text-decoration:none;">Lire &rarr;</a>' : '') +
+      '</div></div>';
+  }).join('');
+  var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">' +
+    '<title>Journal SubstanCiel — ' + today + '</title>' +
+    '<style>body{font-family:Georgia,serif;background:#faf8f4;margin:0;padding:32px;}' +
+    '.masthead{border-bottom:3px solid #1a3c2e;padding-bottom:16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-end;}' +
+    '.name{font-size:2.4rem;font-weight:900;color:#1a3c2e;letter-spacing:-.03em;line-height:1;}' +
+    '.name em{font-style:italic;color:#7ab200;}' +
+    '.meta{font-size:11px;color:#888;text-align:right;line-height:1.6;}' +
+    '.divider{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#aaa;border-top:1px solid #ddd;border-bottom:1px solid #ddd;padding:5px 0;margin-bottom:16px;}' +
+    '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}' +
+    '@media print{body{padding:16px;}.grid{grid-template-columns:repeat(3,1fr);}}</style></head>' +
+    '<body>' +
+    '<div class="masthead"><div><div class="name">Sub<em>stan</em>Ciel</div><div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#aaa;margin-top:2px;">Journal de Veille</div></div>' +
+    '<div class="meta"><div style="font-size:13px;font-weight:700;color:#111;">' + edNum + '</div><div>' + today + '</div><div style="font-size:10px;">' + journalSummaries.length + ' articles</div></div></div>' +
+    '<div class="divider"><span>Actualites de la veille — resumes editoriaux</span></div>' +
+    '<div class="grid">' + cards + '</div>' +
+    '</body></html>';
+  var blob = new Blob([html], {type: 'text/html;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'journal-substanciel-' + today.replace(/\//g, '-') + '.html';
+  a.click();
+  showToast('Journal exporté !');
+}
+
+function exportJournalPDF() {
+  if (!journalSummaries.length) { showToast('Aucune edition a exporter'); return; }
+  var today = new Date().toLocaleDateString('fr-FR');
+  var edNum = document.getElementById('journal-edition-num').textContent;
+  var cards = journalSummaries.map(function(s) {
+    var imp = s.importance === 'haute' ? 'border-top:3px solid #1a3c2e;' : 'border-top:3px solid #ddd;';
+    var dateStr = s.date ? s.date.slice(5).replace('-','/') : '';
+    return '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:7px;break-inside:avoid;margin-bottom:12px;' + imp + '">' +
+      '<div style="font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#999;">' + (s.category || 'Actualite') + '</div>' +
+      '<div style="font-family:Georgia,serif;font-weight:700;font-size:12px;line-height:1.3;color:#111;">' + s.title + '</div>' +
+      '<div style="font-size:11px;color:#444;line-height:1.6;">' + (s.summary || '') + '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:9px;color:#aaa;border-top:1px solid #eee;padding-top:5px;">' +
+        '<span style="font-weight:600;">' + (s.source||'') + '</span>' +
+        '<span>' + dateStr + '</span>' +
+      '</div></div>';
+  }).join('');
+  var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Journal SubstanCiel</title>' +
+    '<style>*{box-sizing:border-box;}body{font-family:Georgia,serif;background:#fff;margin:0;padding:20px 28px;color:#111;}' +
+    '.masthead{border-bottom:3px solid #1a3c2e;padding-bottom:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;}' +
+    '.name{font-size:2rem;font-weight:900;color:#1a3c2e;letter-spacing:-.03em;line-height:1;}' +
+    '.name em{font-style:italic;color:#7ab200;}' +
+    '.divider{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#aaa;border-top:1px solid #ddd;border-bottom:1px solid #ddd;padding:4px 0;margin-bottom:14px;display:flex;justify-content:space-between;}' +
+    '.grid{columns:3;column-gap:12px;}' +
+    '@media print{@page{margin:14mm;}body{padding:0;}.grid{columns:3;}}</style></head>' +
+    '<body>' +
+    '<div class="masthead"><div><div class="name">Sub<em>stan</em>Ciel</div><div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#aaa;margin-top:2px;">Journal de Veille</div></div>' +
+    '<div style="font-size:11px;color:#888;text-align:right;line-height:1.6;"><div style="font-size:12px;font-weight:700;color:#111;">' + edNum + '</div><div>' + today + '</div><div style="font-size:9px;">' + journalSummaries.length + ' articles</div></div></div>' +
+    '<div class="divider"><span>Actualites de la veille</span><span>' + today + '</span></div>' +
+    '<div class="grid">' + cards + '</div>' +
+    '</body></html>';
+  var w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(function(){ w.print(); }, 600);
+}
+
+async function generateJournal() {
+  var btn = document.getElementById('btn-gen-journal');
+  btn.disabled = true; btn.textContent = '⏳ Génération...';
+
+  var acts;
+  if (journalManualIds.size > 0) {
+    // Utiliser la sélection manuelle (boutons 📰 cliqués)
+    acts = allArticles.filter(function(a){ return journalManualIds.has(a.id); }).slice(0, 24);
+    journalManualIds.clear();
+    document.querySelectorAll('.abtn-journal.added').forEach(function(b){ b.classList.remove('added'); b.title='Ajouter au prochain journal'; });
+    var genBtn = document.getElementById('btn-gen-journal');
+    if (genBtn) genBtn.textContent = '📰 Générer';
+  } else {
+    // Filtrer par période
+    var periodDays = parseInt(document.getElementById('journal-period').value) || 0;
+    var cutoff = periodDays > 0 ? new Date(Date.now() - periodDays * 86400000) : null;
+    acts = allArticles.filter(function(a) {
+      var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+      if (tags.indexOf('⭐ Actualité') < 0) return false;
+      if (cutoff && a.scraped_at && new Date(a.scraped_at) < cutoff) return false;
+      return true;
+    }).slice(0, 24);
+  }
+
+  if (!acts.length) {
+    showToast('Aucune actualité disponible'); btn.disabled=false; btn.textContent='📰 Générer une édition'; return;
+  }
+  try {
+    var res = await fetch(API + '/api/journal/summarize', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({articles: acts})
+    });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+    journalSummaries = data.summaries;
+    journalPage = 0;
+    journalCurrentId = null;
+    var today = new Date().toLocaleDateString('fr-FR');
+    document.getElementById('journal-edition-num').textContent = 'Nouvelle édition';
+    document.getElementById('journal-edition-date').textContent = today;
+    document.getElementById('journal-edition-count').textContent = journalSummaries.length + ' articles résumés';
+    renderJournalPage();
+    document.getElementById('journal-current').style.display = 'block';
+    document.getElementById('journal-hist-section').style.display = 'none';
+    showToast('Journal généré — pensez à sauvegarder !');
+  } catch(err) {
+    showToast('Erreur génération : ' + err.message);
+  }
+  btn.disabled=false; btn.textContent='📰 Générer une édition';
+}
+
+// Sélection manuelle pour le journal
+var journalManualIds = new Set();
+function addToJournalSelection(btn) {
+  var id = parseInt(btn.getAttribute('data-id'));
+  if (journalManualIds.has(id)) {
+    journalManualIds.delete(id);
+    btn.classList.remove('added');
+    btn.title = 'Ajouter au prochain journal';
+  } else {
+    journalManualIds.add(id);
+    btn.classList.add('added');
+    btn.title = 'Retirer du journal';
+  }
+  // Mettre à jour le compteur sur le bouton générer
+  var count = journalManualIds.size;
+  var genBtn = document.getElementById('btn-gen-journal');
+  if (genBtn && count > 0) genBtn.textContent = '📰 Générer (' + count + ' sélectionnés)';
+  else if (genBtn) genBtn.textContent = '📰 Générer';
+}
+
+function refreshVeille() {
+  var btn = document.querySelector('#panel-veille .disp-refresh-btn');
+  if (btn) { btn.classList.add('spinning'); setTimeout(function(){ btn.classList.remove('spinning'); }, 500); }
+  loadArticles();
+}
+function refreshDispositifs() {
+  var btn = document.querySelector('#panel-dispositifs .disp-refresh-btn');
+  if (btn) { btn.classList.add('spinning'); setTimeout(function(){ btn.classList.remove('spinning'); }, 500); }
+  loadDispositifs();
+}
+
+function loadJournalEditionById(el) { loadJournalEdition(parseInt(el.getAttribute('data-jid'))); }
+function deleteJournalEditionById(e, btn) { deleteJournalEdition(e, parseInt(btn.getAttribute('data-jid'))); }
+function openDispPptxById(btn) { openDispPptx(parseInt(btn.getAttribute('data-did'))); }
+
+async function init() {
+  buildSidebar();
+  updateLockState();
+  await Promise.all([loadArticles(), loadDispositifs()]);
+  loadJournalHistory();
+}
+
+// ── SIDEBAR ───────────────────────────────────────────────────────────
+function buildSidebar() {
+  const container = document.getElementById('filter-groups');
+  container.innerHTML = TAG_GROUPS.map(g => `
+    <div class="filter-group" id="fg-${g.key}">
+      <div class="filter-group-header" onclick="toggleGroup('${g.key}')">
+        <span class="filter-group-label">${g.label}</span>
+        <span class="filter-group-count" id="fc-${g.key}">0</span>
+        <span class="filter-group-arrow">›</span>
+      </div>
+      <div class="filter-tags" id="ft-${g.key}">
+        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag('${g.key}','${t.replace(/'/g,"\\'")}',this)">${t}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+  // Open first group by default
+  toggleGroup('ref');
+}
+
+function toggleGroup(key) {
+  document.getElementById('fg-' + key).classList.toggle('open');
+}
+
+
+function toggleTag(groupKey, tag, el) {
+  const s = filterState[groupKey].active;
+  if (s.has(tag)) { s.delete(tag); el.classList.remove('active'); }
+  else { s.add(tag); el.classList.add('active'); }
+  const count = s.size;
+  const badge = document.getElementById('fc-' + groupKey);
+  badge.textContent = count;
+  badge.classList.toggle('show', count > 0);
+  if (groupKey === 'ref') updateLockState();
+  applyFilters();
+}
+
+function updateLockState() {
+  const refActive = filterState['ref'] && filterState['ref'].active.size > 0;
+  TAG_GROUPS.forEach(g => {
+    if (g.key === 'ref') return;
+    const el = document.getElementById('fg-' + g.key);
+    if (el) el.classList.toggle('locked', !refActive);
+  });
+}
+
+function clearAllFilters() {
+  TAG_GROUPS.forEach(g => {
+    filterState[g.key].active.clear();
+    document.getElementById('fc-' + g.key).classList.remove('show');
+    document.querySelectorAll(`#ft-${g.key} .filter-tag`).forEach(el => el.classList.remove('active'));
+  });
+  applyFilters();
+}
+
+// ── LOAD DATA ─────────────────────────────────────────────────────────
+async function loadArticles() {
+  try {
+    const res = await fetch(API + '/api/articles?limit=2000');
+    allArticles = await res.json();
+    updateStats();
+    applyFilters();
+  } catch(e) {
+    document.getElementById('articles-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Erreur de chargement</div></div>';
+  }
+}
+
+var collectedUrls = new Set();
+
+async function loadDispositifs() {
+  try {
+    var res = await fetch(API + '/api/dispositifs');
+    allDispositifs = await res.json();
+    // Construire le Set des URLs déjà collectées pour comparaison rapide
+    collectedUrls = new Set(allDispositifs.map(function(d){ return (d.source_url||'').toLowerCase(); }));
+    document.getElementById('st-dispositifs').textContent = allDispositifs.length;
+    renderDispositifs(allDispositifs);
+  } catch(e) {}
+}
+
+function updateStats() {
+  var taggedCount = allArticles.filter(function(a){ var t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.length>0 && !(t.length===1 && t[0]===''); }).length;
+  document.getElementById('st-articles').textContent = taggedCount;
+  const today = new Date().toDateString();
+  const todayCount = allArticles.filter(a => new Date(a.scraped_at).toDateString() === today).length;
+  document.getElementById('st-today').textContent = todayCount;
+  const cdcCount = allArticles.filter(a => a.pdf_url).length;
+  document.getElementById('st-cdc').textContent = cdcCount;
+  renderCDC(allArticles.filter(a => a.pdf_url));
+}
+
+// ── FILTERING ─────────────────────────────────────────────────────────
+// ── FILTRES VUE ──────────────────────────────────────────────────────
+var viewFilter = 'all'; // all | actu | disp | cdc
+
+function setViewFilter(mode, el) {
+  viewFilter = mode;
+  document.querySelectorAll('.vf-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  applyFilters();
+}
+
+function setSortFromSelect(sel) {
+  sortMode = sel.value;
+  applyFilters();
+}
+
+function applyFilters() {
+  var filtered = allArticles;
+
+  // 1. Filtre de vue (onglets)
+  if (viewFilter === 'actu') {
+    filtered = filtered.filter(function(a) {
+      var t = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+      return t.indexOf('⭐ Actualité') >= 0;
+    });
+  } else if (viewFilter === 'disp') {
+    filtered = filtered.filter(function(a) {
+      var t = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+      return t.indexOf('⭐ Dispositif') >= 0;
+    });
+  } else if (viewFilter === 'cdc') {
+    filtered = filtered.filter(function(a) { return !!a.pdf_url; });
+  }
+
+  // 2. Recherche texte
+  if (searchQ) {
+    var q = searchQ.toLowerCase();
+    filtered = filtered.filter(function(a) {
+      return (a.title||'').toLowerCase().includes(q) ||
+             (a.summary||'').toLowerCase().includes(q) ||
+             (a.source||'').toLowerCase().includes(q);
+    });
+  }
+
+  // 3. Filtres tags sidebar
+  TAG_GROUPS.forEach(function(g) {
+    var active = filterState[g.key].active;
+    if (!active.size) return;
+    filtered = filtered.filter(function(a) {
+      var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+      return [...active].some(function(t){ return tags.includes(t); });
+    });
+  });
+
+  // 4. Tri
+  if (sortMode === 'cdc') {
+    filtered.sort(function(a, b) {
+      if (a.pdf_url && !b.pdf_url) return -1;
+      if (!a.pdf_url && b.pdf_url) return 1;
+      return new Date(b.scraped_at) - new Date(a.scraped_at);
+    });
+  } else if (sortMode === 'dispositif') {
+    filtered.sort(function(a, b) {
+      var ad = (Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]')).includes('⭐ Dispositif');
+      var bd = (Array.isArray(b.tags)?b.tags:JSON.parse(b.tags||'[]')).includes('⭐ Dispositif');
+      if (ad && !bd) return -1; if (!ad && bd) return 1;
+      return new Date(b.scraped_at) - new Date(a.scraped_at);
+    });
+  } else {
+    filtered.sort(function(a, b) { return new Date(b.scraped_at) - new Date(a.scraped_at); });
+  }
+
+  document.getElementById('result-count').textContent = filtered.length + ' article' + (filtered.length > 1 ? 's' : '');
+  renderArticles(filtered);
+}
+
+// ── RENDER ARTICLES ───────────────────────────────────────────────────
+function renderArticles(list) {
+  var DISP = '⭐ Dispositif', ACT = '⭐ Actualité';
+  var disps = list.filter(function(a){ var t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.indexOf(DISP)>=0; });
+  var acts  = list.filter(function(a){ var t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.indexOf(ACT)>=0; });
+  var container = document.getElementById('articles-list');
+  if (!disps.length && !acts.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Aucun résultat</div><p>Sélectionnez ⭐ Dispositif ou ⭐ Actualité</p></div>';
+    return;
+  }
+  var html = '';
+  if (disps.length) {
+    html += '<div class="section-label">⭐ Dispositifs <span class="section-count">'+disps.length+'</span></div>';
+    html += renderCards(disps, true);
+  }
+  if (acts.length) {
+    html += '<div class="section-label">📰 Actualités <span class="section-count">'+acts.length+'</span></div>';
+    html += renderCards(acts, false);
+  }
+  container.innerHTML = html;
+  // Attacher les events après injection
+  container.querySelectorAll('.abtn-collect').forEach(function(btn){
+    btn.addEventListener('click', collectFromVeille);
+  });
+  container.querySelectorAll('.card-title-link').forEach(function(a){
+    a.addEventListener('click', function(e){ e.stopPropagation(); });
+  });
+}
+
+function renderCards(list, showCollect) {
+  return list.map(function(a) {
+    var tags     = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+    var isDisp   = tags.indexOf('⭐ Dispositif') >= 0;
+    var hasCDC   = !!a.pdf_url;
+    var date     = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}) : '';
+    var subTags  = tags.filter(function(t){ return t.charAt(0) !== '⭐'; }).slice(0, 4);
+
+    // Construire les badges tags
+    var tagsHTML = (isDisp ? '<span class="atag atag-ref">⭐ Dispositif</span>' : '<span class="atag">⭐ Actualité</span>');
+    tagsHTML += subTags.map(function(t){ return '<span class="atag">'+t+'</span>'; }).join('');
+
+    // Ligne d'actions : CDC + Collecter — PAS de lien imbriqué dans lien
+    var actionsHTML = '';
+    if (showCollect) {
+      if (hasCDC) {
+        actionsHTML += '<button class="abtn abtn-cdc" onclick="openCDC(this);event.stopPropagation();" data-url="'+encodeURI(a.pdf_url)+'">📋 CDC</button>';
+      } else {
+        actionsHTML += '<span class="abtn abtn-nocdc">📋 Pas de CDC</span>';
+      }
+      var alreadyCollected = collectedUrls.has((a.url||'').toLowerCase());
+      if (alreadyCollected) {
+        actionsHTML += '<span class="abtn abtn-collected">✓ Collecté</span>';
+      } else {
+        actionsHTML += '<button class="abtn abtn-collect'+(hasCDC?' abtn-collect-cdc':'')+'" data-url="'+encodeURIComponent(a.url||'')+'" data-title="'+encodeURIComponent(a.title||'')+'" data-id="'+(a.id||0)+'" data-pdf="'+encodeURIComponent(a.pdf_url||'')+'">💾 Collecter</button>';
+      }
+    } else {
+      // Bouton Lire + Ajouter au Journal
+      var safeArticleUrl = (a.url||'').replace(/"/g,'&quot;');
+      actionsHTML += '<a class="abtn abtn-resume" href="'+safeArticleUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 Lire</a>';
+      actionsHTML += '<button class="abtn abtn-journal" onclick="addToJournalSelection(this);event.stopPropagation();" data-id="'+(a.id||0)+'" title="Ajouter au prochain journal">📰</button>';
+    }
+
+    var card = '<div class="acard'+(isDisp?' acard-disp':'')+(hasCDC?' acard-cdc':'')+'">';
+    card += '<div class="acard-header">';
+    card += '<span class="acard-source">'+(a.source||'')+'</span>';
+    card += '<span class="acard-date">'+date+'</span>';
+    card += '</div>';
+    card += '<div class="acard-title"><a class="card-title-link" href="'+encodeURI(a.url||'')+'" target="_blank">'+a.title+'</a></div>';
+    if (a.summary) card += '<div class="acard-summary">'+a.summary+'</div>';
+    card += '<div class="acard-footer"><div class="acard-tags">'+tagsHTML+'</div><div class="acard-actions">'+actionsHTML+'</div></div>';
+    card += '</div>';
+    return card;
+  }).join('');
+}
+
+
+// ── RENDER DISPOSITIFS ────────────────────────────────────────────────
+function renderDispositifs(list) {
+  const container = document.getElementById('disp-grid');
+  document.getElementById('disp-count').textContent = list.length + ' dispositif' + (list.length > 1 ? 's' : '');
+  if (!list.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🗄</div><div class="empty-state-title">Aucun dispositif collecté</div></div>';
+    return;
+  }
+  container.innerHTML = list.map(d => {
+    const empty = v => !v || v === 'Information non fournie';
+    return `<div class="disp-card">
+      <div class="disp-card-header">
+        <div class="disp-card-icon">📄</div>
+        <div>
+          <div class="disp-card-title">${d.titre || 'Dispositif'}</div>
+          <div class="disp-card-financeur">${d.guichet_financeur || ''}</div>
+        </div>
+      </div>
+      ${!empty(d.beneficiaire) ? `<div class="disp-field"><div class="disp-field-label">Bénéficiaires</div><div class="disp-field-val">${d.beneficiaire}</div></div>` : ''}
+      ${!empty(d.territoire) ? `<div class="disp-field"><div class="disp-field-label">Territoire</div><div class="disp-field-val">${d.territoire}</div></div>` : ''}
+      ${!empty(d.montants_taux) ? `<div class="disp-field"><div class="disp-field-label">Montants & taux</div><div class="disp-field-val">${d.montants_taux}</div></div>` : ''}
+      ${!empty(d.date_fermeture) ? `<div class="disp-field"><div class="disp-field-label">Clôture</div><div class="disp-field-val">${d.date_fermeture}</div></div>` : ''}
+      <div class="disp-card-footer">
+        <button class="disp-btn primary" onclick="openDispModal(${d.id})">👁 Voir le détail</button>
+        <a class="disp-btn" href="/api/dispositifs/${d.id}/export-pptx" target="_blank">📊 PPTX</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── FILTER DISPOSITIFS ───────────────────────────────────────────────
+// ── VUE DISPOSITIFS ───────────────────────────────────────────────────
+var dispView = 'cards';
+var dispSortCol = '';
+var dispSortDir = 1;
+
+function setDispView(mode, btn) {
+  dispView = mode;
+  document.querySelectorAll('.dv-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  document.getElementById('disp-grid').style.display      = mode === 'cards' ? '' : 'none';
+  document.getElementById('disp-table-wrap').style.display = mode === 'table' ? '' : 'none';
+  filterDispositifs();
+}
+
+function sortDispTable(col) {
+  if (dispSortCol === col) dispSortDir *= -1;
+  else { dispSortCol = col; dispSortDir = 1; }
+  filterDispositifs();
+}
+
+function filterDispositifs() {
+  var q      = (document.getElementById('disp-search').value || '').toLowerCase();
+  var benef  = document.getElementById('disp-filter-benef').value;
+  var terr   = document.getElementById('disp-filter-territoire').value;
+  var nature = (document.getElementById('disp-filter-nature') || {}).value || '';
+  var depot  = (document.getElementById('disp-filter-depot') || {}).value || '';
+
+  var list = allDispositifs.filter(function(d) {
+    if (q && !(
+      (d.titre||'').toLowerCase().includes(q) ||
+      (d.guichet_financeur||'').toLowerCase().includes(q) ||
+      (d.objectif||'').toLowerCase().includes(q) ||
+      (d.beneficiaire||'').toLowerCase().includes(q)
+    )) return false;
+    if (benef  && !(d.beneficiaire||'').toLowerCase().includes(benef.toLowerCase())) return false;
+    if (terr   && !(d.territoire||'').toLowerCase().includes(terr.toLowerCase())) return false;
+    if (nature && !(d.nature||'').toLowerCase().includes(nature.toLowerCase())) return false;
+    if (depot  && !(d.type_depot||'').toLowerCase().includes(depot.toLowerCase())) return false;
+    return true;
+  });
+
+  if (dispSortCol) {
+    list = list.slice().sort(function(a, b) {
+      var va = (a[dispSortCol] || '').toLowerCase();
+      var vb = (b[dispSortCol] || '').toLowerCase();
+      return va < vb ? -dispSortDir : va > vb ? dispSortDir : 0;
+    });
+  } else {
+    // Tri par défaut : plus récemment collecté en premier
+    list = list.slice().sort(function(a, b) {
+      return new Date(b.collected_at||0) - new Date(a.collected_at||0);
+    });
+  }
+
+  document.getElementById('disp-count').textContent = list.length + ' dispositif' + (list.length > 1 ? 's' : '');
+  renderDispositifs(list);
+  if (dispView === 'table') renderDispTable(list);
+}
+
+function renderDispTable(list) {
+  var tbody = document.getElementById('disp-table-body');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;padding:32px;color:var(--muted);">Aucun dispositif</td></tr>';
+    return;
+  }
+  function cell(v) { return v && v !== 'Information non fournie' ? v : '<span class="dt-empty">—</span>'; }
+  function depotBadge(v) {
+    var cls = 'dt-badge ';
+    if (!v || v === 'Information non fournie') return '<span class="dt-empty">—</span>';
+    var vl = v.toLowerCase();
+    if (vl.includes('fil') || vl.includes('continu')) cls += 'dt-badge-depot-eau';
+    else if (vl.includes('clôtur') || vl.includes('clotur')) cls += 'dt-badge-depot-clos';
+    else if (vl.includes('attente') || vl.includes('renouvell')) cls += 'dt-badge-depot-att';
+    else cls += 'dt-badge-depot-date';
+    return '<span class="' + cls + '">' + v + '</span>';
+  }
+  tbody.innerHTML = list.map(function(d) {
+    return '<tr>' +
+      '<td title="' + (d.titre||'') + '" style="font-weight:700;max-width:200px;">' + cell(d.titre) + '</td>' +
+      '<td>' + cell(d.guichet_financeur) + '</td>' +
+      '<td>' + cell(d.nature) + '</td>' +
+      '<td>' + cell(d.beneficiaire) + '</td>' +
+      '<td>' + cell(d.territoire) + '</td>' +
+      '<td>' + depotBadge(d.type_depot) + '</td>' +
+      '<td>' + cell(d.date_fermeture) + '</td>' +
+      '<td class="wrap" style="max-width:180px;white-space:normal;">' + cell(d.montants_taux) + '</td>' +
+      '<td class="wrap" style="max-width:180px;white-space:normal;">' + cell(d.objectif) + '</td>' +
+      '<td class="wrap" style="max-width:180px;white-space:normal;">' + cell(d.depenses_eligibles) + '</td>' +
+      '<td class="wrap" style="max-width:180px;white-space:normal;">' + cell(d.criteres_eligibilite) + '</td>' +
+      '<td class="wrap" style="max-width:160px;white-space:normal;">' + cell(d.points_vigilance) + '</td>' +
+      '<td>' + cell(d.guichet_instructeur) + '</td>' +
+      '<td>' + cell(d.programme_europeen) + '</td>' +
+      '<td>' + cell(d.contact) + '</td>' +
+      '<td style="text-align:center;white-space:nowrap;">' +
+        '<button class="dt-export-btn" data-did="' + (d.id||0) + '" onclick="openDispPptxById(this)">📊 PPTX</button>' +
+      '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+
+// ── COLLECT ALL MISSING ───────────────────────────────────────────────
+function toggleCollectMenu() {
+  const menu = document.getElementById('collect-submenu');
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  menu.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    setTimeout(() => {
+      document.addEventListener('click', function closeMenu(e) {
+        if (!document.getElementById('collect-all-wrap')?.contains(e.target)) {
+          menu.style.display = 'none';
+          document.removeEventListener('click', closeMenu);
+        }
+      });
+    }, 10);
+  }
+}
+
+async function collectAllMissing(mode) {
+  // mode: 'all' | 'cdc' | 'nocdc'
+  const menuEl = document.getElementById('collect-submenu');
+  if (menuEl) menuEl.style.display = 'none';
+  const btn = document.getElementById('btn-collect-all');
+  const resetBtn = () => { btn.disabled = false; btn.innerHTML = '📥 Collecter tous les dispositifs <span style="font-size:9px;opacity:.8">▾</span>'; };
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Chargement…';
+  try {
+    const arts = await fetch(API + '/api/articles?limit=2000').then(r => r.json());
+    const collected = new Set(allDispositifs.map(d => d.source_url).filter(Boolean));
+    let toCollect = arts.filter(a => {
+      const tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
+      return tags.includes('⭐ Dispositif') && !collected.has(a.url);
+    });
+    if (mode === 'cdc')   toCollect = toCollect.filter(a => !!a.pdf_url);
+    if (mode === 'nocdc') toCollect = toCollect.filter(a => !a.pdf_url);
+
+    const modeLabel = mode === 'cdc' ? 'avec CDC' : mode === 'nocdc' ? 'sans CDC' : '';
+    if (!toCollect.length) {
+      showToast('✅ Aucun dispositif ' + modeLabel + ' à collecter !');
+      resetBtn(); return;
+    }
+    if (!confirm('Collecter ' + toCollect.length + ' dispositif(s) ' + (modeLabel ? '(' + modeLabel + ')' : '') + ' ? Cela utilisera des crédits Claude.')) {
+      resetBtn(); return;
+    }
+    let done = 0, errors = 0;
+    for (const a of toCollect) {
+      btn.innerHTML = '⏳ ' + (done + errors + 1) + '/' + toCollect.length + '…';
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 28000);
+        const d = await fetch(API + '/api/collect', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({url: a.url, title: a.title, id: a.id, pdf_url: a.pdf_url || ''}),
+          signal: ctrl.signal
+        }).then(r => { clearTimeout(tid); return r.json(); });
+        if (!d.error) {
+          await fetch(API + '/api/dispositifs', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(d)
+          });
+          done++;
+        } else { errors++; }
+      } catch(e) { errors++; }
+    }
+    showToast('✅ ' + done + ' collecté(s)' + (errors ? ' — ' + errors + ' erreur(s)' : ''));
+    loadDispositifs();
+  } catch(e) {
+    showToast('❌ Erreur : ' + e.message);
+  }
+  resetBtn();
+}
+
+
+function renderCDC(list) {
+  const container = document.getElementById('cdc-list');
+  document.getElementById('cdc-count').textContent = list.length + ' document' + (list.length > 1 ? 's' : '');
+  if (!list.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-title">Aucun cahier des charges trouvé</div><p>Lancez une analyse CDC depuis l’espace de veille</p></div>';
+    return;
+  }
+  container.innerHTML = list.map(a => {
+    const ext = (a.pdf_url||'').split('.').pop().toUpperCase().slice(0,4);
+    const date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR') : '';
+    return `<div class="cdc-card">
+      <div class="cdc-icon">📄</div>
+      <div class="cdc-info">
+        <div class="cdc-title">${a.title}</div>
+        <div class="cdc-meta">${a.source || ''} · ${date} · ${ext || 'DOC'}</div>
+      </div>
+      <div class="cdc-actions">
+        <a class="cdc-btn" href="${a.url}" target="_blank" rel="noopener">🔗 Fiche</a>
+        <a class="cdc-btn dl" href="${a.pdf_url}" target="_blank" rel="noopener" download>⬇ Télécharger</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── MODAL DISPOSITIF ──────────────────────────────────────────────────
+function openDispModal(id) {
+  const d = allDispositifs.find(x => x.id === id);
+  if (!d) return;
+  currentDispId = id;
+  document.getElementById('modal-title').textContent = '📄 ' + (d.titre || 'Dispositif');
+  const fields = [
+    ["Guichet financeur", d.guichet_financeur],
+    ["Guichet instructeur", d.guichet_instructeur],
+    ["Nature", d.nature],
+    ["Bénéficiaires", d.beneficiaire],
+    ["Type de dépôt", d.type_depot],
+    ["Date de clôture", d.date_fermeture],
+    ["Montants & taux", d.montants_taux],
+    ["Territoire", d.territoire],
+    ["Thématiques", d.thematiques],
+    ["Objectif", d.objectif, true],
+    ["Dépenses éligibles", d.depenses_eligibles, true],
+    ["Critères d’éligibilité", d.criteres_eligibilite, true],
+    ["Points de vigilance", d.points_vigilance, true],
+    ["Contact", d.contact],
+  ];
+  const empty = v => !v || v === 'Information non fournie';
+  document.getElementById('modal-body').innerHTML = fields.map(([label, val, full]) => {
+    const isEmpty = empty(val);
+    return `<div class="modal-field${full ? ' full' : ''}">
+      <div class="modal-field-label">${label}</div>
+      <div class="modal-field-val${isEmpty ? ' empty' : ''}">${isEmpty ? 'Non renseigné' : val}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+function openDispPptx(id) {
+  window.open(API + '/api/dispositifs/' + id + '/export-pptx', '_blank');
+}
+
+function exportDispPptx() {
+  if (currentDispId) window.open(API + '/api/dispositifs/' + currentDispId + '/export-pptx', '_blank');
+}
+
+// ── NAV ───────────────────────────────────────────────────────────────
+function switchTab(tab, btn) {
+  activeTab = tab;
+  document.querySelectorAll('.header-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  if (tab === 'veille360') loadV360Sessions();
+  if (tab === 'dispositifs') loadDispositifs();
+}
+
+// ── PRÉ-VEILLE 360° ──────────────────────────────────────────────────
+async function loadV360Sessions() {
+  var list = document.getElementById('v360-sessions-list');
+  var countEl = document.getElementById('v360-sessions-count');
+  try {
+    var res = await fetch(API + '/api/veille360/sessions');
+    var sessions = await res.json();
+    if (countEl) countEl.textContent = sessions.length + ' analyse' + (sessions.length > 1 ? 's' : '');
+    if (!sessions.length) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">Aucune analyse</div><p>Lancez votre première analyse 360°.</p></div>';
+      return;
+    }
+    list.innerHTML = sessions.map(function(s) {
+      var date = s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : '';
+      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="loadV360Session(' + s.id + ')">' +
+        '<div style="flex:1;"><div style="font-weight:700;font-size:13px;">' + (s.client_name||'Sans nom') + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);">' + date + '</div></div>' +
+        '<button onclick="deleteV360Session(event,' + s.id + ')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:4px;">✕</button>' +
+        '</div>';
+    }).join('');
+  } catch(e) {}
+}
+
+async function loadV360Session(id) {
+  var res = await fetch(API + '/api/veille360/sessions/' + id);
+  var session = await res.json();
+  if (session.result_html) {
+    document.getElementById('v360-modal-body').innerHTML = session.result_html;
+    document.getElementById('v360-modal').style.display = 'flex';
+    document.getElementById('v360-modal-title').textContent = 'Analyse 360° — ' + (session.client_name||'');
+  }
+}
+
+async function deleteV360Session(e, id) {
+  e.stopPropagation();
+  await fetch(API + '/api/veille360/sessions/' + id, {method:'DELETE'});
+  loadV360Sessions();
+}
+
+async function runV360() {
+  var clientInput = document.getElementById('v360-client-input');
+  var projectInput = document.getElementById('v360-project');
+  var statusEl = document.getElementById('v360-status-inline');
+  var btn = document.getElementById('v360-run-btn');
+  var client = (clientInput ? clientInput.value : '') || 'Client';
+  var project = projectInput ? projectInput.value.trim() : '';
+  if (!project) { if (projectInput) projectInput.focus(); return; }
+  btn.disabled = true; btn.textContent = '⏳ Analyse…';
+  if (statusEl) statusEl.textContent = 'Analyse en cours — environ 20 secondes…';
+  try {
+    var res = await fetch(API + '/api/veille360', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({project_desc: project, client_name: client})
+    });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+    var html = data.result_html || data.html || '';
+    document.getElementById('v360-modal-body').innerHTML = html;
+    document.getElementById('v360-modal').style.display = 'flex';
+    document.getElementById('v360-modal-title').textContent = 'Analyse 360° — ' + client;
+    if (statusEl) statusEl.textContent = '';
+    await fetch(API + '/api/veille360/sessions', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({client_name: client, project_desc: project, result_html: html})
+    });
+    loadV360Sessions();
+  } catch(err) {
+    if (statusEl) statusEl.textContent = 'Erreur : ' + err.message;
+  }
+  btn.disabled = false; btn.textContent = '🔍 Lancer une analyse';
+}
+
+
 // ── JOURNAL ───────────────────────────────────────────────────────────
 var journalSummaries = [];
 var journalPage = 0;
@@ -7637,102 +8586,6 @@ def delete_veille360_session(sid):
     cur.execute("DELETE FROM veille360_sessions WHERE id=%s", (sid,))
     conn.commit(); cur.close(); conn.close()
     return jsonify({'status': 'deleted'})
-
-@app.route('/api/veille360/sessions/<int:sid>/dispositifs', methods=['GET'])
-def get_projet_dispositifs(sid):
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT * FROM projet_dispositifs WHERE session_id=%s ORDER BY created_at DESC", (sid,))
-    rows = cur.fetchall(); cur.close(); conn.close()
-    return jsonify([dict(r) for r in rows])
-
-@app.route('/api/veille360/sessions/<int:sid>/dispositifs', methods=['POST'])
-def add_projet_dispositif(sid):
-    data = request.get_json()
-    conn = get_db(); cur = conn.cursor()
-    fields = ['session_id','titre','guichet_financeur','nature','beneficiaire','territoire',
-              'type_depot','date_fermeture','montants_taux','objectif','operations_eligibles',
-              'depenses_eligibles','criteres_eligibilite','points_vigilance','contact','source_url','statut','notes']
-    vals = [sid] + [data.get(f,'') for f in fields[1:]]
-    cols = ','.join(fields)
-    phs  = ','.join(['%s']*len(fields))
-    # Eviter doublon sur source_url
-    if data.get('source_url'):
-        cur.execute("SELECT id FROM projet_dispositifs WHERE session_id=%s AND source_url=%s", (sid, data['source_url']))
-        if cur.fetchone():
-            cur.close(); conn.close()
-            return jsonify({'status':'duplicate'}), 200
-    cur.execute(f"INSERT INTO projet_dispositifs ({cols}) VALUES ({phs}) RETURNING id", vals)
-    new_id = cur.fetchone()['id']
-    conn.commit(); cur.close(); conn.close()
-    return jsonify({'id': new_id, 'status': 'ok'})
-
-@app.route('/api/veille360/sessions/<int:sid>/dispositifs/<int:did>', methods=['PATCH'])
-def update_projet_dispositif(sid, did):
-    data = request.get_json()
-    conn = get_db(); cur = conn.cursor()
-    allowed = ['statut','notes','contact']
-    sets = ', '.join(f"{k}=%s" for k in data if k in allowed)
-    vals = [data[k] for k in data if k in allowed] + [did, sid]
-    if sets:
-        cur.execute(f"UPDATE projet_dispositifs SET {sets} WHERE id=%s AND session_id=%s", vals)
-        conn.commit()
-    cur.close(); conn.close()
-    return jsonify({'status':'ok'})
-
-@app.route('/api/veille360/sessions/<int:sid>/dispositifs/<int:did>', methods=['DELETE'])
-def delete_projet_dispositif(sid, did):
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("DELETE FROM projet_dispositifs WHERE id=%s AND session_id=%s", (did, sid))
-    conn.commit(); cur.close(); conn.close()
-    return jsonify({'status':'deleted'})
-
-@app.route('/api/veille360/sessions/<int:sid>/notes', methods=['PATCH'])
-def update_projet_notes(sid):
-    data = request.get_json()
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("UPDATE veille360_sessions SET notes=%s WHERE id=%s", (data.get('notes',''), sid))
-    conn.commit(); cur.close(); conn.close()
-    return jsonify({'status':'ok'})
-
-@app.route('/api/veille360/sessions/<int:sid>/contact', methods=['POST'])
-def generate_contact_email(sid):
-    """Génère un email de contact pour un dispositif via Claude."""
-    if not ANTHROPIC_API_KEY:
-        return jsonify({'error': 'API key missing'}), 500
-    data = request.get_json()
-    disp = data.get('dispositif', {})
-    client = data.get('client_name', '')
-    project = data.get('project_desc', '')
-    prompt = f"""Tu es un consultant en financement public. Rédige un email professionnel et concis pour contacter l'instructeur du dispositif suivant.
-
-Client : {client}
-Projet : {project}
-Dispositif : {disp.get('titre','')}
-Financeur : {disp.get('guichet_financeur','')}
-Contact connu : {disp.get('contact','')}
-
-L'email doit :
-- Se présenter brièvement en tant que consultant mandaté
-- Décrire le projet en 2 phrases
-- Demander confirmation de l'éligibilité et les prochaines étapes
-- Rester sous 150 mots
-- Ton : professionnel et direct
-
-Retourne UNIQUEMENT l'email (objet + corps), sans commentaire."""
-
-    try:
-        payload = json.dumps({"model":"claude-haiku-4-5-20251001","max_tokens":400,
-            "messages":[{"role":"user","content":prompt}]}).encode()
-        req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={
-            "Content-Type":"application/json","x-api-key":ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01"
-        }, method="POST")
-        with urlopen(req, timeout=20) as resp:
-            result = json.loads(resp.read())
-        email_text = result["content"][0]["text"].strip()
-        return jsonify({'email': email_text})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 
 @app.route('/api/journal', methods=['GET'])
 def get_journal_editions():
