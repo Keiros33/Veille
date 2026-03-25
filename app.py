@@ -3157,7 +3157,7 @@ async function removeFromShortlist(did) {
 
 // ── EMAIL DE CONTACT ───────────────────────────────────────────────────
 async function generateEmail(did) {
-  showToast('Génération de l'email…');
+  showToast('Génération email contact...');
   var res_d = await fetch(API + '/api/veille360/sessions/' + currentProjetId + '/dispositifs');
   var disps = await res_d.json();
   var disp = disps.find(function(d){ return d.id === did; });
