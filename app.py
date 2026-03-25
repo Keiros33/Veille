@@ -273,6 +273,8 @@ def init_db():
         created_at TIMESTAMP DEFAULT NOW()
     )""")
     cur.execute("CREATE TABLE IF NOT EXISTS journal_editions (id SERIAL PRIMARY KEY, title TEXT NOT NULL, edition_date DATE DEFAULT CURRENT_DATE, summaries JSONB NOT NULL DEFAULT '[]', created_at TIMESTAMP DEFAULT NOW())")
+    cur.execute("CREATE TABLE IF NOT EXISTS projet_dispositifs (id SERIAL PRIMARY KEY, session_id INTEGER NOT NULL REFERENCES veille360_sessions(id) ON DELETE CASCADE, titre TEXT, guichet_financeur TEXT, nature TEXT, beneficiaire TEXT, territoire TEXT, type_depot TEXT, date_fermeture TEXT, montants_taux TEXT, objectif TEXT, operations_eligibles TEXT, depenses_eligibles TEXT, criteres_eligibilite TEXT, points_vigilance TEXT, contact TEXT, source_url TEXT, statut TEXT DEFAULT 'identifie', notes TEXT DEFAULT '', created_at TIMESTAMP DEFAULT NOW())")
+    cur.execute("ALTER TABLE veille360_sessions ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''")
     conn.commit(); cur.close(); conn.close()
     log.info("DB ready")
 
@@ -1255,6 +1257,67 @@ body {
 .abtn-journal.added { background:rgba(26,60,46,.1); color:var(--accent); border-color:var(--accent); }
 
 /* ── JOURNAL DA ───────────────────────────────────────────────────── */
+/* ── ESPACE PROJET ────────────────────────────────────────────────── */
+.ep-list-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+.ep-new-btn { padding:7px 18px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; border:none; background:var(--accent); color:var(--lime); }
+.ep-project-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  padding:16px 18px; cursor:pointer; transition:all .15s;
+  display:flex; align-items:center; gap:14px;
+}
+.ep-project-card:hover { box-shadow:var(--shadow); border-color:rgba(26,60,46,.3); transform:translateY(-1px); }
+.ep-project-card-icon { font-size:24px; width:40px; text-align:center; flex-shrink:0; }
+.ep-project-card-main { flex:1; min-width:0; }
+.ep-project-card-client { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; color:var(--text); }
+.ep-project-card-desc { font-size:12px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ep-project-card-meta { font-size:10px; color:var(--muted2); margin-top:4px; }
+.ep-project-card-actions { display:flex; gap:6px; flex-shrink:0; }
+.ep-del-btn { padding:4px 10px; border:1px solid var(--border); border-radius:6px; font-size:11px; cursor:pointer; background:none; color:var(--muted); }
+.ep-del-btn:hover { background:rgba(220,50,50,.08); color:#c03030; border-color:#c03030; }
+
+.ep-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding-bottom:14px; border-bottom:2px solid var(--border); margin-bottom:14px; flex-wrap:wrap; }
+.ep-client-name { font-family:'Syne',sans-serif; font-size:20px; font-weight:800; color:var(--accent); }
+.ep-project-desc { font-size:12px; color:var(--muted); margin-top:4px; max-width:500px; line-height:1.55; }
+.ep-action-btn { padding:7px 16px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; border:1.5px solid var(--border); background:var(--surface2); color:var(--text); transition:all .15s; }
+.ep-action-btn:hover { border-color:var(--accent); color:var(--accent); }
+.ep-pptx-btn { background:var(--accent); color:var(--lime); border-color:var(--accent); }
+.ep-pptx-btn:hover { opacity:.88; }
+.ep-back-btn { }
+
+.ep-tabs { display:flex; gap:4px; margin-bottom:16px; border-bottom:2px solid var(--border); }
+.ep-tab { padding:8px 18px; border-radius:8px 8px 0 0; font-size:12px; font-weight:700; border:none; background:none; color:var(--muted); cursor:pointer; transition:all .15s; border-bottom:2px solid transparent; margin-bottom:-2px; }
+.ep-tab.active { color:var(--accent); border-bottom-color:var(--accent); background:rgba(26,60,46,.04); }
+.ep-pane { display:none; }
+.ep-pane.active { display:block; }
+
+/* Kanban */
+.ep-kanban { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+.ep-kanban-col { background:var(--surface2); border-radius:10px; padding:12px; min-height:200px; }
+.ep-kanban-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:10px; }
+.ep-kanban-cards { display:flex; flex-direction:column; gap:8px; }
+.ep-disp-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:12px 14px; display:flex; flex-direction:column; gap:6px;
+}
+.ep-disp-card-title { font-size:12px; font-weight:700; color:var(--text); line-height:1.3; }
+.ep-disp-card-fin { font-size:10px; color:var(--muted); }
+.ep-disp-card-actions { display:flex; gap:5px; flex-wrap:wrap; margin-top:4px; }
+.ep-disp-btn { padding:3px 9px; border-radius:5px; font-size:10px; font-weight:700; cursor:pointer; border:1px solid var(--border); background:var(--surface2); color:var(--text); transition:all .12s; }
+.ep-disp-btn:hover { border-color:var(--accent); color:var(--accent); }
+.ep-disp-btn.email { border-color:rgba(91,138,240,.4); color:#4070d0; background:rgba(91,138,240,.06); }
+.ep-disp-btn.pptx { border-color:rgba(26,60,46,.3); color:var(--accent); background:rgba(26,60,46,.06); }
+.ep-disp-btn.del  { border-color:rgba(200,50,50,.2); color:#c03030; background:rgba(200,50,50,.04); }
+.ep-statut-sel { font-size:10px; border:1px solid var(--border); border-radius:5px; background:var(--surface2); color:var(--muted); padding:2px 6px; cursor:pointer; outline:none; }
+
+/* Résultats 360° dans le volet analyse */
+.v360-result-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:10px; }
+.v360-result-table th { background:var(--accent); color:var(--lime); padding:8px 10px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+.v360-result-table td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; line-height:1.55; }
+.v360-result-table tr:hover td { background:rgba(26,60,46,.03); }
+.v360-collect-btn { padding:4px 10px; border-radius:5px; font-size:10px; font-weight:700; cursor:pointer; border:1.5px solid var(--accent); background:none; color:var(--accent); white-space:nowrap; }
+.v360-collect-btn:hover { background:var(--accent); color:var(--lime); }
+.v360-collect-btn.done { background:rgba(62,207,122,.1); border-color:rgba(62,207,122,.4); color:#1a7a40; cursor:default; }
+
 .journal-masthead {
   border-bottom: 3px solid var(--accent);
   padding-bottom: 14px; margin-bottom: 20px;
@@ -1646,7 +1709,7 @@ body {
     <button class="header-tab" onclick="switchTab('dispositifs', this)">🗄 Dispositifs</button>
     <button class="header-tab" onclick="switchTab('cdc', this)">📋 Cahiers des charges</button>
     <button class="header-tab" onclick="switchTab('journal', this)">📰 Journal</button>
-    <button class="header-tab" onclick="switchTab('veille360', this)">🔍 Pré-veille 360°</button>
+    <button class="header-tab" onclick="switchTab('veille360', this)">🎯 Studio Financement</button>
   </nav>
   <div class="header-search">
     <span class="header-search-icon">🔍</span>
@@ -1862,26 +1925,106 @@ body {
       </div>
     </div>
 
-    <!-- PANEL PRÉ-VEILLE 360° -->
+    <!-- ESPACE PROJET -->
     <div class="panel" id="panel-veille360">
-      <div class="sort-row" style="flex-wrap:wrap;gap:8px;">
-        <span class="result-count" id="v360-sessions-count">— analyses</span>
-        <input id="v360-client-input" placeholder="Nom du client / dossier…"
-          style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text);outline:none;min-width:160px;flex:1;">
-        <button onclick="runV360()" id="v360-run-btn"
-          style="padding:5px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:var(--accent);color:var(--lime);">
-          🔍 Lancer une analyse
-        </button>
+
+      <!-- VUE LISTE DES PROJETS -->
+      <div id="ep-list-view">
+        <div class="ep-list-header">
+          <span class="result-count" id="v360-sessions-count">— dossiers</span>
+          <button onclick="openNewProjet()" class="ep-new-btn">+ Nouveau dossier</button>
+        </div>
+        <div id="v360-sessions-list" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
+          <div class="spinner"></div>
+        </div>
       </div>
-      <div id="v360-form" style="padding:10px 0 4px;display:flex;flex-direction:column;gap:8px;">
-        <textarea id="v360-project" placeholder="Décrivez le projet CAPEX du client : porteur, nature des travaux, localisation, montant estimé, contexte…"
-          style="width:100%;min-height:90px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:12px;resize:vertical;font-family:inherit;box-sizing:border-box;"></textarea>
-        <div id="v360-status-inline" style="font-size:11px;color:var(--muted);min-height:16px;"></div>
+
+      <!-- VUE DÉTAIL D'UN PROJET -->
+      <div id="ep-detail-view" style="display:none;">
+        <!-- Header projet -->
+        <div class="ep-header">
+          <div>
+            <div class="ep-client-name" id="ep-client-name">Client</div>
+            <div class="ep-project-desc" id="ep-project-desc"></div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button onclick="exportProjetPptx()" class="ep-action-btn ep-pptx-btn">📊 Export PPTX</button>
+            <button onclick="closeProjetDetail()" class="ep-action-btn ep-back-btn">← Retour</button>
+          </div>
+        </div>
+
+        <!-- Onglets du projet -->
+        <div class="ep-tabs">
+          <button class="ep-tab active" id="ept-analyse" onclick="switchEpTab('analyse',this)">🔍 Analyse 360°</button>
+          <button class="ep-tab" id="ept-shortlist" onclick="switchEpTab('shortlist',this)">⭐ Shortlist</button>
+          <button class="ep-tab" id="ept-notes" onclick="switchEpTab('notes',this)">📝 Notes</button>
+        </div>
+
+        <!-- Volet Analyse 360° -->
+        <div class="ep-pane active" id="ep-pane-analyse">
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+            <textarea id="v360-project" placeholder="Décrivez le projet : porteur, nature des travaux, localisation, montant estimé, contexte…"
+              style="flex:1;min-width:280px;min-height:70px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:12px;resize:vertical;font-family:inherit;box-sizing:border-box;"></textarea>
+            <div style="display:flex;flex-direction:column;gap:6px;justify-content:flex-end;">
+              <button onclick="runV360()" id="v360-run-btn" class="ep-action-btn" style="background:var(--accent);color:var(--lime);border:none;">🔍 Analyser</button>
+            </div>
+          </div>
+          <div id="v360-status-inline" style="font-size:11px;color:var(--muted);min-height:14px;margin-bottom:8px;"></div>
+          <div id="v360-modal-body" style="font-size:12px;line-height:1.6;"></div>
+        </div>
+
+        <!-- Volet Shortlist -->
+        <div class="ep-pane" id="ep-pane-shortlist">
+          <div class="ep-kanban" id="ep-kanban">
+            <div class="ep-kanban-col">
+              <div class="ep-kanban-title">🔵 Identifié</div>
+              <div class="ep-kanban-cards" id="ep-col-identifie"></div>
+            </div>
+            <div class="ep-kanban-col">
+              <div class="ep-kanban-title">🟡 En cours</div>
+              <div class="ep-kanban-cards" id="ep-col-en_cours"></div>
+            </div>
+            <div class="ep-kanban-col">
+              <div class="ep-kanban-title">🟢 Déposé</div>
+              <div class="ep-kanban-cards" id="ep-col-depose"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Volet Notes -->
+        <div class="ep-pane" id="ep-pane-notes">
+          <textarea id="ep-notes-area" placeholder="Notes libres sur le projet, le client, les échanges…"
+            style="width:100%;min-height:300px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:14px;font-size:13px;line-height:1.7;resize:vertical;font-family:inherit;box-sizing:border-box;"
+            oninput="autoSaveNotes()"></textarea>
+          <div id="ep-notes-saved" style="font-size:10px;color:var(--muted);margin-top:6px;"></div>
+        </div>
       </div>
-      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:8px 0 6px;">Historique des analyses</div>
-      <div id="v360-sessions-list" style="display:flex;flex-direction:column;gap:6px;">
-        <div class="spinner"></div>
+
+      <!-- MODAL NOUVEAU PROJET -->
+      <div id="ep-new-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center;">
+        <div style="background:var(--surface);border-radius:14px;padding:28px;width:90%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--accent);margin-bottom:16px;">Nouveau dossier client</div>
+          <input id="ep-new-client" placeholder="Nom du client…" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text);outline:none;box-sizing:border-box;margin-bottom:10px;">
+          <textarea id="ep-new-desc" placeholder="Description du projet CAPEX : nature, localisation, montant estimé, porteur…" style="width:100%;min-height:100px;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text);outline:none;resize:vertical;font-family:inherit;box-sizing:border-box;margin-bottom:16px;"></textarea>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button onclick="closeNewProjet()" style="padding:8px 18px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;font-size:13px;">Annuler</button>
+            <button onclick="createProjet()" style="padding:8px 18px;border:none;border-radius:8px;background:var(--accent);color:var(--lime);cursor:pointer;font-size:13px;font-weight:700;">Créer le dossier</button>
+          </div>
+        </div>
       </div>
+
+      <!-- MODAL EMAIL CONTACT -->
+      <div id="ep-email-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center;">
+        <div style="background:var(--surface);border-radius:14px;padding:28px;width:90%;max-width:600px;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+          <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--accent);margin-bottom:14px;">📧 Email de contact généré</div>
+          <textarea id="ep-email-content" style="width:100%;min-height:220px;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:12px;line-height:1.7;background:var(--surface2);color:var(--text);resize:vertical;font-family:monospace;box-sizing:border-box;"></textarea>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+            <button onclick="copyEmail()" style="padding:8px 18px;border:1.5px solid var(--accent);border-radius:8px;background:none;color:var(--accent);cursor:pointer;font-size:12px;font-weight:700;">📋 Copier</button>
+            <button onclick="document.getElementById('ep-email-modal').style.display='none'" style="padding:8px 18px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;font-size:12px;">Fermer</button>
+          </div>
+        </div>
+      </div>
+
     </div>
 
   </main>
@@ -2804,810 +2947,302 @@ function switchTab(tab, btn) {
   if (tab === 'dispositifs') loadDispositifs();
 }
 
-// ── PRÉ-VEILLE 360° ───────────────────────────────────────────────────
-const PROMPT_360_C = `You are "Recherche 360°", a Senior Consultant in public and private financial engineering specialized exclusively in identifying CAPEX funding for investment projects carried by local authorities or private entities eligible for public investment aid. Your sole mission is to conduct exhaustive strategic pre-screening to verify that all schemes financing tangible assets have been identified. Scope: strictly CAPEX only (real estate, works, construction, rehabilitation, equipment, networks, energy performance, etc.). Apply a strict three-criteria eligibility test: 1) Beneficiary legally compatible. 2) Eligible base explicitly finances tangible CAPEX. 3) Purpose coherent with project nature. Return a structured HTML table with columns: Thématique | Territoire | Financeur | Instructeur | Nom exact du dispositif | Type (subvention/prêt/prime) | Base CAPEX éligible | Pertinence stratégique | Montant/Taux indicatif | Statut | Lien officiel. Color-code rows. Never invent schemes. Conclude with exhaustiveness validation. Language: French. Return only clean HTML, no markdown.`;
+// ── ESPACE PROJET ────────────────────────────────────────────────────
+var currentProjetId = null;
+var currentProjetData = {};
+var notesSaveTimer = null;
 
-async function runV360() {
-  const clientName = document.getElementById('v360-client-input').value.trim();
-  const project    = document.getElementById('v360-project').value.trim();
-  const status     = document.getElementById('v360-status-inline');
-  if (!clientName) { document.getElementById('v360-client-input').focus(); showToast('Indiquez un nom de client / dossier'); return; }
-  if (!project)    { document.getElementById('v360-project').focus(); showToast('Décrivez le projet'); return; }
-  const btn = document.getElementById('v360-run-btn');
-  btn.disabled = true; btn.textContent = '⏳ Analyse…';
-  status.textContent = 'Interrogation de l’IA…';
-  try {
-    const resp = await fetch(API + '/api/veille360', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        system: PROMPT_360_C,
-        messages: [{role:'user', content: project}]
-      })
-    });
-    const data = await resp.json();
-    const html_result = data.content && data.content.find(b => b.type === 'text')
-      ? data.content.find(b => b.type === 'text').text : (data.error || 'Aucun résultat.');
-    // Sauvegarder en DB
-    await fetch(API + '/api/veille360/sessions', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({client_name: clientName, project_desc: project, result_html: html_result})
-    });
-    status.textContent = '✅ Analyse sauvegardée dans le dossier "' + clientName + '"';
-    document.getElementById('v360-client-input').value = '';
-    document.getElementById('v360-project').value = '';
-    loadV360Sessions();
-    openV360Modal(clientName, html_result);
-  } catch(e) {
-    status.textContent = '❌ Erreur : ' + e.message;
-  }
-  btn.disabled = false; btn.textContent = '🔍 Lancer une analyse';
-}
-
+// ── LISTE DES PROJETS ─────────────────────────────────────────────────
 async function loadV360Sessions() {
-  const list = document.getElementById('v360-sessions-list');
-  const count = document.getElementById('v360-sessions-count');
+  var list = document.getElementById('v360-sessions-list');
   try {
-    const sessions = await fetch(API + '/api/veille360/sessions').then(r => r.json());
-    count.textContent = sessions.length + ' analyse' + (sessions.length > 1 ? 's' : '');
+    var res = await fetch(API + '/api/veille360/sessions');
+    var sessions = await res.json();
+    document.getElementById('v360-sessions-count').textContent = sessions.length + ' projet' + (sessions.length > 1 ? 's' : '');
     if (!sessions.length) {
-      list.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:12px 0;">Aucune analyse — lancez votre première pré-veille 360° ci-dessus.</div>';
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🗂</div><div class="empty-state-title">Aucun dossier</div><p>Créez votre premier projet client.</p></div>';
       return;
     }
-    list.innerHTML = sessions.map(s => {
-      const d = new Date(s.created_at).toLocaleDateString('fr-FR', {day:'numeric', month:'short', year:'numeric'});
-      const desc = (s.project_desc || '').slice(0, 80) + ((s.project_desc||'').length > 80 ? '…' : '');
-      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="openV360Session(${s.id})">
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:700;font-size:12px;color:var(--accent);">${s.client_name}</div>
-          <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${desc || '—'}</div>
-        </div>
-        <div style="font-size:10px;color:var(--muted2);white-space:nowrap;">${d}</div>
-        <button onclick="event.stopPropagation();deleteV360Session(${s.id})" title="Supprimer"
-          style="background:none;border:1px solid rgba(200,57,43,.2);color:#c8392b;border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:11px;flex-shrink:0;">✕</button>
-      </div>`;
+    list.innerHTML = sessions.map(function(s) {
+      var date = s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : '';
+      var desc = (s.project_desc||'').slice(0,80) + ((s.project_desc||'').length > 80 ? '…' : '');
+      return '<div class="ep-project-card" onclick="openProjet(' + s.id + ',this)">' +
+        '<div class="ep-project-card-icon">🗂</div>' +
+        '<div class="ep-project-card-main">' +
+          '<div class="ep-project-card-client">' + (s.client_name||'Sans nom') + '</div>' +
+          '<div class="ep-project-card-desc">' + desc + '</div>' +
+          '<div class="ep-project-card-meta">' + date + '</div>' +
+        '</div>' +
+        '<div class="ep-project-card-actions">' +
+          '<button class="ep-del-btn" onclick="deleteProjet(event,' + s.id + ')">✕</button>' +
+        '</div></div>';
     }).join('');
-  } catch(e) {
-    list.innerHTML = '<div style="font-size:12px;color:var(--muted);">Erreur chargement</div>';
-  }
+  } catch(e) { list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Erreur</div></div>'; }
 }
 
-async function openV360Session(id) {
-  try {
-    const s = await fetch(API + '/api/veille360/sessions/' + id).then(r => r.json());
-    openV360Modal(s.client_name, s.result_html);
-  } catch(e) { showToast('Erreur chargement'); }
+// ── CRÉER / OUVRIR / FERMER ────────────────────────────────────────────
+function openNewProjet() {
+  document.getElementById('ep-new-client').value = '';
+  document.getElementById('ep-new-desc').value = '';
+  document.getElementById('ep-new-modal').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('ep-new-client').focus(); }, 100);
+}
+function closeNewProjet() { document.getElementById('ep-new-modal').style.display = 'none'; }
+
+async function createProjet() {
+  var client = document.getElementById('ep-new-client').value.trim();
+  var desc   = document.getElementById('ep-new-desc').value.trim();
+  if (!client) { document.getElementById('ep-new-client').focus(); return; }
+  var res = await fetch(API + '/api/veille360/sessions', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({client_name: client, project_desc: desc, result_html: ''})
+  });
+  var data = await res.json();
+  closeNewProjet();
+  await loadV360Sessions();
+  openProjet(data.id || data.session_id);
 }
 
-function openV360Modal(clientName, htmlContent) {
-  document.getElementById('v360-modal-title').textContent = '🔍 Analyse 360° — ' + clientName;
-  document.getElementById('v360-modal-body').innerHTML = htmlContent;
-  document.getElementById('v360-modal').style.display = 'flex';
+async function openProjet(id) {
+  var res = await fetch(API + '/api/veille360/sessions/' + id);
+  var session = await res.json();
+  currentProjetId = id;
+  currentProjetData = session;
+  document.getElementById('ep-client-name').textContent = session.client_name || 'Projet';
+  document.getElementById('ep-project-desc').textContent = session.project_desc || '';
+  document.getElementById('v360-project').value = session.project_desc || '';
+  document.getElementById('ep-notes-area').value = session.notes || '';
+  document.getElementById('v360-modal-body').innerHTML = session.result_html || '<p style="color:var(--muted);font-size:12px;">Lancez une analyse 360° pour identifier les dispositifs potentiels.</p>';
+  document.getElementById('ep-list-view').style.display = 'none';
+  document.getElementById('ep-detail-view').style.display = 'block';
+  switchEpTab('analyse', document.getElementById('ept-analyse'));
+  loadProjetShortlist();
 }
 
-async function deleteV360Session(id) {
-  if (!confirm('Supprimer cette analyse ?')) return;
-  await fetch(API + '/api/veille360/sessions/' + id, {method: 'DELETE'});
+function closeProjetDetail() {
+  document.getElementById('ep-detail-view').style.display = 'none';
+  document.getElementById('ep-list-view').style.display = 'block';
+  currentProjetId = null;
   loadV360Sessions();
 }
 
-function setSort(mode, btn) {
-  // Toggle : si déjà actif, repasser en tri par date
-  if (sortMode === mode && mode !== 'date') {
-    sortMode = 'date';
-    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
-    const dateBtn = document.getElementById('sort-date-btn');
-    if (dateBtn) dateBtn.classList.add('active');
-  } else {
-    sortMode = mode;
-    document.querySelectorAll('.sort-btn:not(.filter-toggle)').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+async function deleteProjet(e, id) {
+  e.stopPropagation();
+  if (!confirm('Supprimer ce dossier ?')) return;
+  await fetch(API + '/api/veille360/sessions/' + id, {method:'DELETE'});
+  loadV360Sessions();
+}
+
+// ── ONGLETS PROJET ─────────────────────────────────────────────────────
+function switchEpTab(tab, btn) {
+  document.querySelectorAll('.ep-tab').forEach(function(b){ b.classList.remove('active'); });
+  document.querySelectorAll('.ep-pane').forEach(function(p){ p.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  document.getElementById('ep-pane-' + tab).classList.add('active');
+  if (tab === 'shortlist') loadProjetShortlist();
+}
+
+// ── ANALYSE 360° ───────────────────────────────────────────────────────
+async function runV360() {
+  if (!currentProjetId) return;
+  var project = document.getElementById('v360-project').value.trim();
+  if (!project) { document.getElementById('v360-project').focus(); return; }
+  var btn = document.getElementById('v360-run-btn');
+  btn.disabled = true; btn.textContent = '⏳ Analyse…';
+  document.getElementById('v360-status-inline').textContent = 'Analyse en cours — environ 20 secondes…';
+  try {
+    var res = await fetch(API + '/api/veille360', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({project_desc: project, client_name: currentProjetData.client_name || ''})
+    });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+    // Enrichir le HTML avec boutons Collecter
+    var enriched = enrichV360Result(data.result_html || data.html || '');
+    document.getElementById('v360-modal-body').innerHTML = enriched;
+    document.getElementById('v360-status-inline').textContent = '';
+    // Sauvegarder
+    await fetch(API + '/api/veille360/sessions', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({client_name: currentProjetData.client_name, project_desc: project, result_html: enriched, id: currentProjetId})
+    });
+  } catch(err) {
+    document.getElementById('v360-status-inline').textContent = '⚠ Erreur : ' + err.message;
   }
-  applyFilters();
+  btn.disabled = false; btn.textContent = '🔍 Analyser';
 }
 
-let searchTimer;
-function onSearch() {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
-    searchQ = document.getElementById('search').value.trim();
-    applyFilters();
-  }, 250);
-}
-
-// ── TOAST ─────────────────────────────────────────────────────────────
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2800);
-}
-
-// ── START ─────────────────────────────────────────────────────────────
-init();
-</script>
-
-<!-- MODAL AUTO-TAG AGENT -->
-<div id="autotag-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border-radius:14px;padding:28px;width:420px;max-width:94vw;box-shadow:0 20px 60px rgba(0,0,0,.3);">
-    <div style="font-family:Syne,sans-serif;font-weight:800;font-size:17px;margin-bottom:4px">&#129302; Agent Curation IA</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Tagger automatiquement les articles avec Claude Haiku</div>
-    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
-      <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer">
-        <input type="checkbox" id="at-only-untagged" checked style="accent-color:var(--accent)">
-        Traiter uniquement les articles non tagés
-      </label>
-      <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer">
-        <input type="checkbox" id="at-delete-irrelevant" style="accent-color:#c0392b">
-        <span>Supprimer les articles non pertinents <span style="color:#c0392b;font-weight:700">(irréversible)</span></span>
-      </label>
-      <label style="font-size:12px;display:flex;flex-direction:column;gap:4px">
-        Nombre d’articles à traiter :
-        <input type="number" id="at-limit" value="50" min="5" max="200" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;width:100px">
-      </label>
-    </div>
-    <div id="autotag-progress" style="display:none;margin-bottom:16px">
-      <div style="height:6px;background:var(--surface2);border-radius:4px;overflow:hidden;margin-bottom:8px">
-        <div id="at-bar" style="height:100%;background:var(--lime);border-radius:4px;width:0%;transition:width .3s"></div>
-      </div>
-      <div id="at-status-text" style="font-size:11px;color:var(--muted)">Initialisation…</div>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="closeAutoTagPanel()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;font-size:12px">Annuler</button>
-      <button id="at-start-btn" onclick="startAutoTag()" style="padding:8px 18px;border-radius:8px;border:none;background:var(--accent);color:var(--lime);font-weight:800;cursor:pointer;font-size:12px">&#9654; Lancer</button>
-    </div>
-  </div>
-</div>
-
-<script>
-// ── AUTO-TAG AGENT ──────────────────────────────────────────────
-function openAutoTagPanel() {
-  document.getElementById('autotag-modal').style.display = 'flex';
-  document.getElementById('autotag-progress').style.display = 'none';
-  document.getElementById('at-start-btn').disabled = false;
-  document.getElementById('at-start-btn').textContent = '\u25b6 Lancer';
-}
-function closeAutoTagPanel() {
-  document.getElementById('autotag-modal').style.display = 'none';
-}
-function startAutoTag() {
-  const limit = parseInt(document.getElementById('at-limit').value) || 50;
-  const onlyUntagged = document.getElementById('at-only-untagged').checked;
-  const deleteIrr = document.getElementById('at-delete-irrelevant').checked;
-  document.getElementById('at-start-btn').disabled = true;
-  document.getElementById('autotag-progress').style.display = 'block';
-  document.getElementById('at-status-text').textContent = 'D\u00e9marrage\u2026';
-  fetch(API + '/api/auto-tag', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({limit, only_untagged: onlyUntagged, delete_irrelevant: deleteIrr})
-  }).then(r => r.json()).then(d => {
-    if (d.error) { showToast('\u26a0 ' + d.error); return; }
-    if (d.status === 'no_articles') { showToast('Aucun article \u00e0 traiter'); return; }
-    pollAutoTagStatus();
-  }).catch(e => showToast('\u26a0 Erreur r\u00e9seau'));
-}
-function pollAutoTagStatus() {
-  fetch(API + '/api/auto-tag/status').then(r => r.json()).then(d => {
-    const bar = document.getElementById('at-bar');
-    const txt = document.getElementById('at-status-text');
-    bar.style.width = d.progress + '%';
-    txt.textContent = d.done + '/' + d.total + ' articles \u2014 ' + d.tagged + ' tag\u00e9s, ' + (d.skipped||0) + ' ignor\u00e9s, ' + d.errors + ' erreurs';
-    if (d.status === 'running') {
-      setTimeout(pollAutoTagStatus, 1500);
-    } else {
-      txt.textContent = '\u2705 Termin\u00e9 ! ' + d.tagged + ' article(s) tag\u00e9(s) \u2014 dont heuristiques, ' + (d.skipped||0) + ' ignor\u00e9s';
-      document.getElementById('at-start-btn').textContent = '\u2713 Fait';
-      setTimeout(function(){ closeAutoTagPanel(); loadArticles(); }, 2000);
-    }
+function enrichV360Result(html) {
+  // Ajouter bouton "Retenir" sur chaque ligne de dispositif dans le tableau 360°
+  return html.replace(/<tr>/g, '<tr class="v360-row">').replace(/<\/tr>/g, function(match, offset, str) {
+    // Récupérer le titre de la ligne
+    return '<td><button class="v360-collect-btn" onclick="retainFromV360(this)">⭐ Retenir</button></td></tr>';
   });
 }
-// ────────────────────────────────────────────────────────────────
-</script>
-</body>
-</html>"""
 
-LANDING_PAGE = """<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SubstanCiel — Plateforme de veille intelligente</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg: #f4f3ef; --surface: #ffffff; --surface2: #f0efe9;
-  --border: #e2e0d8; --text: #1a1a18; --text2: #5a5a52; --muted: #9a9a90;
-  --accent: #1a3c2e; --lime: #c8e84e; --lime-soft: #e8f5b0;
-}
-html { scroll-behavior: smooth; }
-body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); }
-a { text-decoration: none; }
-
-/* ── NAV ── */
-.nav {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 52px; height: 62px;
-  background: rgba(244,243,239,.94); backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; z-index: 100;
-}
-.nav-logo {
-  font-family: 'Syne', sans-serif; font-weight: 800; font-size: 19px;
-  color: var(--accent); display: flex; align-items: center; gap: 9px;
-}
-.logo-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: var(--lime);
-  box-shadow: 0 0 0 4px rgba(200,232,78,.25);
-  animation: sc-pulse 2.4s ease-in-out infinite;
-}
-@keyframes sc-pulse {
-  0%,100% { box-shadow: 0 0 0 4px rgba(200,232,78,.2); }
-  50%      { box-shadow: 0 0 0 8px rgba(200,232,78,.07); }
-}
-.nav-links { display: flex; align-items: center; gap: 28px; }
-.nav-links a { font-size: 13px; font-weight: 500; color: var(--text2); transition: color .15s; }
-.nav-links a:hover { color: var(--accent); }
-.nav-cta {
-  background: var(--accent) !important; color: var(--lime) !important;
-  padding: 7px 18px; border-radius: 100px; font-weight: 600 !important; font-size: 13px !important;
-  transition: transform .15s, box-shadow .15s;
-}
-.nav-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(26,60,46,.28); }
-
-/* ── HERO ── */
-.hero {
-  padding: 88px 52px 72px;
-  display: flex; flex-direction: column; align-items: center; text-align: center;
-  background: var(--bg); position: relative; overflow: hidden;
-}
-.hero-grid {
-  position: absolute; inset: 0; pointer-events: none;
-  background-image: linear-gradient(var(--border) 1px, transparent 1px),
-                    linear-gradient(90deg, var(--border) 1px, transparent 1px);
-  background-size: 72px 72px; opacity: .45;
-  mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, black, transparent);
-  -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, black, transparent);
-}
-.hero-blob {
-  position: absolute; border-radius: 50%;
-  background: var(--lime); opacity: .08; pointer-events: none;
-}
-.eyebrow {
-  position: relative;
-  font-size: 11px; font-weight: 600; letter-spacing: .13em; text-transform: uppercase;
-  color: var(--accent); background: var(--lime-soft);
-  border: 1px solid rgba(200,232,78,.5); padding: 5px 16px; border-radius: 100px;
-  margin-bottom: 26px; display: inline-block;
-}
-.hero-title {
-  position: relative;
-  font-family: 'Syne', sans-serif; font-weight: 800;
-  font-size: clamp(38px, 5.5vw, 68px); line-height: 1.06; letter-spacing: -.03em;
-  color: var(--accent); max-width: 840px; margin-bottom: 22px;
-}
-.hl { display: inline-block; position: relative; }
-.hl::after {
-  content: ''; position: absolute; left: 0; right: 0; bottom: 4px;
-  height: 7px; background: var(--lime); z-index: -1; border-radius: 3px; opacity: .65;
-}
-.hero-sub {
-  position: relative; font-size: 17px; color: var(--text2);
-  line-height: 1.65; max-width: 520px; margin-bottom: 40px; font-weight: 300;
-}
-.hero-btns {
-  position: relative;
-  display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 56px;
-}
-.btn-p {
-  background: var(--accent); color: var(--lime); padding: 13px 28px; border-radius: 100px;
-  font-weight: 600; font-size: 14px; border: none; font-family: 'DM Sans', sans-serif;
-  display: inline-flex; align-items: center; gap: 7px;
-  transition: transform .15s, box-shadow .15s; cursor: pointer;
-}
-.btn-p:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(26,60,46,.28); }
-.btn-s {
-  background: var(--surface); color: var(--accent); padding: 13px 24px; border-radius: 100px;
-  font-weight: 500; font-size: 14px; border: 1.5px solid var(--border);
-  font-family: 'DM Sans', sans-serif;
-  display: inline-flex; align-items: center; gap: 7px; transition: border-color .15s, background .15s;
-}
-.btn-s:hover { border-color: var(--accent); background: var(--lime-soft); }
-
-/* STATS */
-.stats {
-  position: relative;
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
-  max-width: 760px; width: 100%; overflow: hidden;
-}
-.stat { padding: 22px 28px; text-align: center; border-right: 1px solid var(--border); }
-.stat:last-child { border-right: none; }
-.stat-n { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 32px; color: var(--accent); line-height: 1; }
-.stat-n em { color: var(--lime); font-style: normal; }
-.stat-l { font-size: 11px; color: var(--muted); margin-top: 5px; }
-
-/* ── SECTION ESPACES ── */
-.section { padding: 80px 52px; background: var(--bg); }
-.sec-head { text-align: center; margin-bottom: 52px; }
-.sec-eye {
-  font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--muted); margin-bottom: 10px;
-}
-.sec-title {
-  font-family: 'Syne', sans-serif; font-weight: 800;
-  font-size: clamp(24px, 3vw, 40px); color: var(--accent);
-  letter-spacing: -.02em; margin-bottom: 12px; line-height: 1.1;
-}
-.sec-sub { font-size: 15px; color: var(--text2); max-width: 480px; margin: 0 auto; line-height: 1.65; }
-
-/* GRILLE 3 CARTES */
-.cards-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 20px; max-width: 1100px; margin: 0 auto;
+async function retainFromV360(btn) {
+  if (!currentProjetId) return;
+  btn.disabled = true; btn.textContent = '⏳…';
+  var row = btn.closest('tr');
+  var cells = row ? row.querySelectorAll('td') : [];
+  var titre = cells[0] ? cells[0].textContent.trim() : '';
+  var financeur = cells[1] ? cells[1].textContent.trim() : '';
+  var nature = cells[2] ? cells[2].textContent.trim() : '';
+  var territoire = cells[3] ? cells[3].textContent.trim() : '';
+  var montants = cells[4] ? cells[4].textContent.trim() : '';
+  var res = await fetch(API + '/api/veille360/sessions/' + currentProjetId + '/dispositifs', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({titre:titre, guichet_financeur:financeur, nature:nature, territoire:territoire, montants_taux:montants, statut:'identifie'})
+  });
+  var data = await res.json();
+  if (data.status === 'duplicate') { btn.textContent = '✓ Déjà retenu'; }
+  else { btn.className = 'v360-collect-btn done'; btn.textContent = '✓ Retenu'; }
 }
 
-/* CARTE ESPACE */
-.ecard {
-  border-radius: 22px; display: flex; flex-direction: column;
-  transition: transform .22s, box-shadow .22s; overflow: hidden;
+// ── SHORTLIST / KANBAN ─────────────────────────────────────────────────
+async function loadProjetShortlist() {
+  if (!currentProjetId) return;
+  var res = await fetch(API + '/api/veille360/sessions/' + currentProjetId + '/dispositifs');
+  var disps = await res.json();
+  var cols = {identifie:[], en_cours:[], depose:[]};
+  disps.forEach(function(d){ if (cols[d.statut]) cols[d.statut].push(d); else cols['identifie'].push(d); });
+  Object.keys(cols).forEach(function(statut) {
+    var el = document.getElementById('ep-col-' + statut);
+    if (!el) return;
+    if (!cols[statut].length) { el.innerHTML = '<div style="font-size:11px;color:var(--muted2);text-align:center;padding:12px;">Aucun dispositif</div>'; return; }
+    el.innerHTML = cols[statut].map(function(d) {
+      return '<div class="ep-disp-card">' +
+        '<div class="ep-disp-card-title">' + (d.titre||'Sans titre') + '</div>' +
+        '<div class="ep-disp-card-fin">' + (d.guichet_financeur||'') + (d.nature?' · '+d.nature:'') + '</div>' +
+        (d.montants_taux ? '<div style="font-size:10px;color:var(--accent);font-weight:700;">' + d.montants_taux.slice(0,60) + '</div>' : '') +
+        '<div class="ep-disp-card-actions">' +
+          '<select class="ep-statut-sel" onchange="changeStatut(this,' + d.id + ')">' +
+            '<option value="identifie"' + (d.statut==='identifie'?' selected':'') + '>🔵 Identifié</option>' +
+            '<option value="en_cours"' + (d.statut==='en_cours'?' selected':'') + '>🟡 En cours</option>' +
+            '<option value="depose"' + (d.statut==='depose'?' selected':'') + '>🟢 Déposé</option>' +
+          '</select>' +
+          '<button class="ep-disp-btn pptx" onclick="collectFromShortlist(this,' + d.id + ')">📋 Fiche complète</button>' +
+          '<button class="ep-disp-btn email" onclick="generateEmail(' + d.id + ')">📧 Contact</button>' +
+          '<button class="ep-disp-btn del" onclick="removeFromShortlist(' + d.id + ')">✕</button>' +
+        '</div></div>';
+    }).join('');
+  });
 }
-.ecard:hover { transform: translateY(-5px); box-shadow: 0 22px 50px rgba(26,60,46,.13); }
-.ecard-dark  { background: var(--accent); }
-.ecard-white { background: var(--surface); border: 1.5px solid var(--border); }
-.ecard-gray  { background: var(--surface2); border: 1.5px dashed var(--border); opacity: .76; }
 
-.ecard-inner { padding: 32px 28px 28px; flex: 1; display: flex; flex-direction: column; }
-
-.etag {
-  font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
-  margin-bottom: 22px; display: flex; align-items: center; gap: 8px;
+async function changeStatut(sel, did) {
+  await fetch(API + '/api/veille360/sessions/' + currentProjetId + '/dispositifs/' + did, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({statut: sel.value})
+  });
+  setTimeout(loadProjetShortlist, 200);
 }
-.ecard-dark  .etag { color: rgba(200,232,78,.4); }
-.ecard-white .etag { color: var(--muted); }
-.ecard-gray  .etag { color: var(--muted); }
 
-.ebadge { font-size: 9px; padding: 2px 8px; border-radius: 100px; font-weight: 700; }
-.ebadge-live  { background: rgba(200,232,78,.2);  color: var(--lime); }
-.ebadge-liveg { background: rgba(200,232,78,.18); color: #3a6020; }
-.ebadge-wip   { background: var(--border);        color: var(--muted); }
-
-.eicon {
-  width: 48px; height: 48px; border-radius: 13px;
-  display: flex; align-items: center; justify-content: center; margin-bottom: 18px;
+async function removeFromShortlist(did) {
+  await fetch(API + '/api/veille360/sessions/' + currentProjetId + '/dispositifs/' + did, {method:'DELETE'});
+  loadProjetShortlist();
 }
-.ecard-dark  .eicon { background: rgba(200,232,78,.12); }
-.ecard-white .eicon { background: var(--lime-soft); }
-.ecard-gray  .eicon { background: var(--border); }
 
-.ename {
-  font-family: 'Syne', sans-serif; font-weight: 800;
-  font-size: 22px; line-height: 1.1; margin-bottom: 9px;
+// ── EMAIL DE CONTACT ───────────────────────────────────────────────────
+async function generateEmail(did) {
+  showToast('Génération de l'email…');
+  var res_d = await fetch(API + '/api/veille360/sessions/' + currentProjetId + '/dispositifs');
+  var disps = await res_d.json();
+  var disp = disps.find(function(d){ return d.id === did; });
+  if (!disp) return;
+  var res = await fetch(API + '/api/veille360/sessions/' + currentProjetId + '/contact', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({dispositif: disp, client_name: currentProjetData.client_name, project_desc: currentProjetData.project_desc})
+  });
+  var data = await res.json();
+  document.getElementById('ep-email-content').value = data.email || data.error || '';
+  document.getElementById('ep-email-modal').style.display = 'flex';
 }
-.ecard-dark  .ename { color: var(--lime); }
-.ecard-white .ename { color: var(--accent); }
-.ecard-gray  .ename { color: var(--text2); }
 
-.edesc { font-size: 13.5px; line-height: 1.6; margin-bottom: 22px; }
-.ecard-dark  .edesc { color: rgba(244,243,239,.58); }
-.ecard-white .edesc { color: var(--text2); }
-.ecard-gray  .edesc { color: var(--muted); }
-
-.efeats { list-style: none; flex: 1; display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; }
-.efeats li { font-size: 13px; display: flex; align-items: flex-start; gap: 9px; line-height: 1.45; }
-.ecard-dark  .efeats li { color: rgba(244,243,239,.73); }
-.ecard-white .efeats li { color: var(--text2); }
-.ecard-gray  .efeats li { color: var(--muted); }
-.fdot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
-.ecard-dark  .fdot { background: var(--lime); }
-.ecard-white .fdot { background: var(--accent); }
-.ecard-gray  .fdot { background: var(--border); }
-
-.eurl {
-  font-size: 10px; font-weight: 500; letter-spacing: .04em;
-  margin-bottom: 10px; display: block;
+function copyEmail() {
+  var ta = document.getElementById('ep-email-content');
+  navigator.clipboard.writeText(ta.value).then(function(){ showToast('Email copié !'); });
 }
-.ecard-dark  .eurl { color: rgba(200,232,78,.28); }
-.ecard-white .eurl { color: var(--muted); }
-.ecard-gray  .eurl { color: var(--border); }
 
-.ebtn {
-  display: inline-flex; align-items: center; gap: 7px;
-  font-weight: 600; font-size: 13px; padding: 11px 22px; border-radius: 100px;
-  cursor: pointer; border: none; font-family: 'DM Sans', sans-serif; transition: all .15s;
-}
-.ecard-dark  .ebtn { background: var(--lime); color: var(--accent); }
-.ecard-dark  .ebtn:hover { background: #d8f060; transform: translateX(2px); }
-.ecard-white .ebtn { background: var(--accent); color: var(--lime); }
-.ecard-white .ebtn:hover { box-shadow: 0 6px 18px rgba(26,60,46,.22); transform: translateX(2px); }
-.ecard-gray  .ebtn { background: var(--border); color: var(--muted); cursor: not-allowed; }
-
-/* ── PIPELINE ── */
-.pipe-wrap { padding: 0 52px 80px; }
-.pipeline {
-  background: var(--accent); border-radius: 26px;
-  padding: 60px 52px; position: relative; overflow: hidden;
-}
-.pipe-blob { position: absolute; border-radius: 50%; background: var(--lime); opacity: .05; pointer-events: none; }
-.pipe-eye { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: rgba(200,232,78,.4); margin-bottom: 8px; }
-.pipe-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(22px, 2.8vw, 34px); color: var(--lime); letter-spacing: -.02em; line-height: 1.1; margin-bottom: 10px; }
-.pipe-sub { font-size: 14px; color: rgba(244,243,239,.48); max-width: 460px; line-height: 1.6; margin-bottom: 44px; }
-.pipe-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; position: relative; }
-.pipe-step {
-  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.09);
-  border-radius: 14px; padding: 22px 18px; position: relative; transition: background .18s;
-}
-.pipe-step:hover { background: rgba(255,255,255,.09); }
-.pipe-num { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 28px; color: rgba(200,232,78,.14); line-height: 1; margin-bottom: 12px; }
-.pipe-t { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; color: var(--lime); margin-bottom: 7px; }
-.pipe-d { font-size: 12px; color: rgba(244,243,239,.5); line-height: 1.55; }
-.pipe-arr {
-  position: absolute; right: -14px; top: 50%; transform: translateY(-50%);
-  width: 26px; height: 26px; background: var(--accent);
-  border: 1px solid rgba(200,232,78,.18); border-radius: 50%;
-  display: flex; align-items: center; justify-content: center; z-index: 2;
-}
-.pipe-step:last-child .pipe-arr { display: none; }
-
-/* ── AGENT ── */
-.agent { padding: 80px 52px; }
-.agent-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; align-items: center; max-width: 1100px; margin: 0 auto; }
-.agent-pts { display: flex; flex-direction: column; gap: 20px; margin-top: 24px; }
-.apt { display: flex; gap: 13px; align-items: flex-start; }
-.apt-ico { width: 32px; height: 32px; border-radius: 10px; background: var(--lime-soft); flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
-.apt-t { font-weight: 600; font-size: 14px; color: var(--accent); margin-bottom: 3px; }
-.apt-d { font-size: 13px; color: var(--text2); line-height: 1.5; }
-
-.terminal { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 22px; }
-.tbar { display: flex; align-items: center; gap: 6px; margin-bottom: 18px; }
-.tdot { width: 10px; height: 10px; border-radius: 50%; }
-.tlbl { font-size: 11px; color: var(--muted); margin-left: 8px; font-weight: 500; }
-.tlog { display: flex; flex-direction: column; gap: 7px; min-height: 130px; }
-.tline { display: flex; gap: 9px; align-items: flex-start; }
-.ttag { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 4px; flex-shrink: 0; margin-top: 2px; letter-spacing: .04em; }
-.tok  { background: #e8f5e8; color: #2a7a2a; }
-.tdisp{ background: var(--lime-soft); color: var(--accent); }
-.tact { background: #e8eeff; color: #2a4bb0; }
-.tdel { background: #fde8e8; color: #b02a2a; }
-.ttxt { font-size: 12px; color: var(--text2); line-height: 1.4; }
-.tprog { background: var(--surface2); border-radius: 5px; height: 5px; margin-top: 16px; overflow: hidden; }
-.tpbar { height: 100%; background: var(--lime); border-radius: 5px; transition: width 1s ease; width: 0%; }
-.tmeta { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 5px; }
-
-/* ── FOOTER ── */
-footer {
-  background: var(--accent); padding: 48px 52px;
-  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;
-}
-.flogo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; color: var(--lime); }
-.ftag  { font-size: 12px; color: rgba(200,232,78,.38); margin-top: 4px; }
-.flinks { display: flex; gap: 26px; }
-.flinks a { font-size: 13px; color: rgba(244,243,239,.42); transition: color .15s; }
-.flinks a:hover { color: var(--lime); }
-</style>
-</head>
-<body>
-
-<!-- ── NAV ── -->
-<nav class="nav">
-  <div class="nav-logo">
-    <div class="logo-dot"></div>
-    SubstanCiel
-  </div>
-  <div class="nav-links">
-    <a href="#espaces">Les espaces</a>
-    <a href="#pipeline">Pipeline</a>
-    <a href="#agent">Agent IA</a>
-    <a href="/app" class="nav-cta">Espace Curation &rarr;</a>
-  </div>
-</nav>
-
-<!-- ── HERO ── -->
-<div class="hero">
-  <div class="hero-grid"></div>
-  <div class="hero-blob" style="width:580px;height:580px;top:-150px;right:-90px;"></div>
-  <div class="hero-blob" style="width:260px;height:260px;bottom:30px;left:-50px;"></div>
-
-  <div class="eyebrow">Plateforme de veille intelligente</div>
-  <h1 class="hero-title">
-    La veille strat&eacute;gique<br>
-    <span class="hl">automatis&eacute;e</span> pour les<br>
-    experts du financement
-  </h1>
-  <p class="hero-sub">
-    Scraping intelligent sur 91 sources, qualification IA et collecte structur&eacute;e en 19 champs.
-    Ne manquez plus aucun dispositif de financement public.
-  </p>
-  <div class="hero-btns">
-    <a href="/app" class="btn-p">
-      Espace Curation
-      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1.5 6.5h10M8 3l4 3.5-4 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </a>
-    <a href="/consultant" class="btn-s">
-      Espace Collecte
-      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1.5 6.5h10M8 3l4 3.5-4 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </a>
-  </div>
-  <div class="stats">
-    <div class="stat">
-      <div class="stat-n">91<em>+</em></div>
-      <div class="stat-l">Sources surveill&eacute;es</div>
-    </div>
-    <div class="stat">
-      <div class="stat-n">6<em>h</em></div>
-      <div class="stat-l">Cycle de scraping auto</div>
-    </div>
-    <div class="stat">
-      <div class="stat-n">19</div>
-      <div class="stat-l">Champs par dispositif</div>
-    </div>
-  </div>
-</div>
-
-<!-- ── ESPACES ── -->
-<div id="espaces" class="section">
-  <div class="sec-head">
-    <div class="sec-eye">Les 3 espaces</div>
-    <h2 class="sec-title">Un outil, trois niveaux d'usage</h2>
-    <p class="sec-sub">De la captation brute &agrave; la gestion de projet client, chaque espace r&eacute;pond &agrave; un besoin m&eacute;tier distinct.</p>
-  </div>
-
-  <div class="cards-grid">
-
-    <!-- 01 CURATION -->
-    <div class="ecard ecard-dark">
-      <div class="ecard-inner">
-        <div class="etag">
-          <span>01</span>
-          <span class="ebadge ebadge-live">&#9679; Actif</span>
-        </div>
-        <div class="eicon">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <path d="M11 2l2.5 6H20l-5.5 4 2 6L11 14l-5.5 4 2-6L2 8h6.5L11 2z" stroke="rgba(200,232,78,.75)" stroke-width="1.6" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="ename">Espace Curation</div>
-        <p class="edesc">Le back-office du veilleur. Supervision du flux complet, qualification et alimentation de la base consultants.</p>
-        <ul class="efeats">
-          <li><span class="fdot"></span>Scraping automatique toutes les 6h sur 91 sources</li>
-          <li><span class="fdot"></span>Agent IA&nbsp;: tagging automatique + suppression du bruit</li>
-          <li><span class="fdot"></span>D&eacute;tection CDC au scraping (PDF, Word&hellip;)</li>
-          <li><span class="fdot"></span>Dashboard stats, Veille 360&deg;, export PowerPoint</li>
-          <li><span class="fdot"></span>Gestion des sources par dossier / r&eacute;pertoire</li>
-        </ul>
-        <span class="eurl">veille-q32f.onrender.com/app</span>
-        <a href="/app" class="ebtn">
-          Ouvrir la curation
-          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1 5.5h9M6.5 2l3 3.5-3 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-    </div>
-
-    <!-- 02 COLLECTE -->
-    <div class="ecard ecard-white">
-      <div class="ecard-inner">
-        <div class="etag">
-          <span>02</span>
-          <span class="ebadge ebadge-liveg">&#9679; Actif</span>
-        </div>
-        <div class="eicon">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <path d="M14 2H8a2 2 0 00-2 2v14a2 2 0 002 2h8a2 2 0 002-2V8l-4-6z" stroke="#1a3c2e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M14 2v6h6M8 13h6M8 17h4" stroke="#1a3c2e" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="ename">Espace Collecte</div>
-        <p class="edesc">L'interface consultants en lecture seule. Acc&egrave;s &agrave; toute la veille qualifi&eacute;e, collecte directe des dispositifs en base partagée.</p>
-        <ul class="efeats">
-          <li><span class="fdot"></span>Vue s&eacute;par&eacute;e&nbsp;: &#11088; Dispositifs / &#128240; Actualit&eacute;s</li>
-          <li><span class="fdot"></span>Filtres&nbsp;: type, b&eacute;n&eacute;ficiaire, territoire, m&eacute;canisme</li>
-          <li><span class="fdot"></span>Bouton &laquo;&nbsp;Collecter&nbsp;&raquo; &rarr; Claude analyse le CDC en priorit&eacute;</li>
-          <li><span class="fdot"></span>Base dispositifs partag&eacute;e, doublon impossible</li>
-          <li><span class="fdot"></span>Acc&egrave;s multi-consultant simultan&eacute;, lecture seule</li>
-        </ul>
-        <span class="eurl">veille-q32f.onrender.com/consultant</span>
-        <a href="/consultant" class="ebtn">
-          Ouvrir la collecte
-          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1 5.5h9M6.5 2l3 3.5-3 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-      </div>
-    </div>
-
-    <!-- 03 PROJET -->
-    <div class="ecard ecard-gray">
-      <div class="ecard-inner">
-        <div class="etag">
-          <span>03</span>
-          <span class="ebadge ebadge-wip">En d&eacute;veloppement</span>
-        </div>
-        <div class="eicon">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <rect x="3" y="3" width="16" height="12" rx="2" stroke="#9a9a90" stroke-width="1.6"/>
-            <path d="M7 19h8M11 15v4M7 8h2M11 8h4M7 11h8" stroke="#9a9a90" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="ename">Espace Projet</div>
-        <p class="edesc" style="color:#9a9a90;font-style:italic;">En programmation</p>
-        <ul class="efeats" style="display:none">
-          <li><span class="fdot"></span>placeholder</li>
-          <li><span class="fdot"></span>placeholder</li>
-          <li><span class="fdot"></span>placeholder</li>
-          <li><span class="fdot"></span>placeholder automatique</li>
-          <li><span class="fdot"></span>placeholder</li>
-        </ul>
-        <span class="eurl">Disponible prochainement</span>
-        <button class="ebtn" disabled>Bient&ocirc;t disponible</button>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<!-- ── PIPELINE ── -->
-<div id="pipeline" class="pipe-wrap">
-  <div class="pipeline">
-    <div class="pipe-blob" style="width:420px;height:420px;top:-160px;right:-60px;"></div>
-    <div class="pipe-eye">Pipeline automatis&eacute;</div>
-    <div class="pipe-title">De la source brute &agrave; la fiche structur&eacute;e</div>
-    <div class="pipe-sub">Chaque article suit un pipeline en 4 &eacute;tapes avant d'&ecirc;tre disponible pour les consultants.</div>
-    <div class="pipe-steps">
-      <div class="pipe-step">
-        <div class="pipe-num">01</div>
-        <div class="pipe-t">Scraping</div>
-        <div class="pipe-d">91 sources surveill&eacute;es. Nouveaux articles et CDC d&eacute;tect&eacute;s &agrave; chaque cycle de 6h.</div>
-        <div class="pipe-arr">
-          <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1 4.5h7M5 2l3 2.5L5 7" stroke="rgba(200,232,78,.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-      </div>
-      <div class="pipe-step">
-        <div class="pipe-num">02</div>
-        <div class="pipe-t">Curation IA</div>
-        <div class="pipe-d">Agent Claude Haiku&nbsp;: tag Dispositif / Actualit&eacute;, sous-tags QUI/O&Ugrave;/COMMENT, suppression du bruit.</div>
-        <div class="pipe-arr">
-          <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1 4.5h7M5 2l3 2.5L5 7" stroke="rgba(200,232,78,.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-      </div>
-      <div class="pipe-step">
-        <div class="pipe-num">03</div>
-        <div class="pipe-t">Collecte</div>
-        <div class="pipe-d">1&nbsp;clic consultant. Claude analyse le CDC PDF en priorit&eacute; &rarr; fiche structur&eacute;e en 19 champs.</div>
-        <div class="pipe-arr">
-          <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1 4.5h7M5 2l3 2.5L5 7" stroke="rgba(200,232,78,.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-      </div>
-      <div class="pipe-step">
-        <div class="pipe-num">04</div>
-        <div class="pipe-t">Base partag&eacute;e</div>
-        <div class="pipe-d">Fiche disponible pour toute l'&eacute;quipe. Export PPTX en 1&nbsp;clic, doublon impossible.</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ── AGENT IA ── -->
-<div id="agent" class="agent">
-  <div class="agent-inner">
-    <div>
-      <div class="sec-eye">Agent IA</div>
-      <h2 class="sec-title">Curation automatique,<br>z&eacute;ro bruit</h2>
-      <p class="sec-sub">Lancez l'agent depuis l'espace curation. Il analyse chaque article, attribue les bons tags et &eacute;limine ce qui ne m&eacute;rite pas attention.</p>
-      <div class="agent-pts">
-        <div class="apt">
-          <div class="apt-ico">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h4l2-4 3 8 2-4h3" stroke="#1a3c2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div>
-            <div class="apt-t">Tagging contextuel</div>
-            <div class="apt-d">Type, b&eacute;n&eacute;ficiaires, territoire, m&eacute;canisme &mdash; jusqu'&agrave; 8 tags par article.</div>
-          </div>
-        </div>
-        <div class="apt">
-          <div class="apt-ico">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 4L6 12l-3-3" stroke="#1a3c2e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div>
-            <div class="apt-t">Suppression du bruit</div>
-            <div class="apt-d">Articles hors-sujet supprim&eacute;s automatiquement, avec confirmation avant ex&eacute;cution.</div>
-          </div>
-        </div>
-        <div class="apt">
-          <div class="apt-ico">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="#1a3c2e" stroke-width="1.5"/><path d="M8 5.5v3l2 1.5" stroke="#1a3c2e" stroke-width="1.5" stroke-linecap="round"/></svg>
-          </div>
-          <div>
-            <div class="apt-t">Configurable</div>
-            <div class="apt-d">Articles non tag&uacute;s uniquement, ou tout le flux. De 5 &agrave; 200 articles par session.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="terminal">
-      <div class="tbar">
-        <div class="tdot" style="background:#ff5f57"></div>
-        <div class="tdot" style="background:#febc2e"></div>
-        <div class="tdot" style="background:#28c840"></div>
-        <span class="tlbl">Agent Curation IA &mdash; session active</span>
-      </div>
-      <div class="tlog" id="sc-log"></div>
-      <div class="tprog"><div class="tpbar" id="sc-bar"></div></div>
-      <div class="tmeta">
-        <span id="sc-status">En attente&hellip;</span>
-        <span id="sc-pct">0%</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ── FOOTER ── -->
-<footer>
-  <div>
-    <div class="flogo">SubstanCiel</div>
-    <div class="ftag">Plateforme de veille intelligente &mdash; financement public</div>
-  </div>
-  <div class="flinks">
-    <a href="/app">Espace Curation</a>
-    <a href="/consultant">Espace Collecte</a>
-  </div>
-</footer>
-
-<script>
-(function () {
-  var logs = [
-    { t: 'ok',   l: 'Chargement de 47 articles non tag\u00e9s\u2026' },
-    { t: 'disp', l: 'AAP ADEME Fonds Chaleur 2025 \u2192 \u2b50 Dispositif \u00b7 \u00c9nergie \u00b7 AAP \u00b7 National' },
-    { t: 'act',  l: 'France 2030 bilan mi-parcours \u2192 \u2b50 Actualit\u00e9 \u00b7 Innovation \u00b7 National' },
-    { t: 'del',  l: 'Supprim\u00e9 \u2014 hors sujet (presse g\u00e9n\u00e9raliste)' },
-    { t: 'disp', l: 'AMI Bpifrance Industrie verte \u2192 \u2b50 Dispositif \u00b7 Industrie \u00b7 AMI' },
-    { t: 'act',  l: 'PLF 2026 cr\u00e9dit imp\u00f4t recherche \u2192 \u2b50 Actualit\u00e9 \u00b7 R\u00e9forme' },
-    { t: 'disp', l: 'FEADER Occitanie 2025 \u2192 \u2b50 Dispositif \u00b7 Agriculture \u00b7 FEADER' },
-    { t: 'del',  l: 'Supprim\u00e9 \u2014 contenu dupliqu\u00e9 d\u00e9tect\u00e9' },
-    { t: 'ok',   l: '\u2713 47 trait\u00e9s \u2014 32 tag\u00e9s \u00b7 8 supprim\u00e9s \u00b7 0 erreur' }
-  ];
-  var cm = { ok: 'tok', disp: 'tdisp', act: 'tact', del: 'tdel' };
-  var lm = { ok: 'OK', disp: 'DISP', act: 'ACT', del: 'DEL' };
-  var logEl = document.getElementById('sc-log');
-  var bar   = document.getElementById('sc-bar');
-  var st    = document.getElementById('sc-status');
-  var pct   = document.getElementById('sc-pct');
-  var s = 0;
-
-  function next() {
-    if (s >= logs.length) {
-      bar.style.width = '100%';
-      st.textContent  = '\u2713 Termin\u00e9';
-      pct.textContent = '100%';
-      setTimeout(function () {
-        s = 0; logEl.innerHTML = '';
-        bar.style.transition = 'none'; bar.style.width = '0%';
-        st.textContent = 'En attente\u2026'; pct.textContent = '0%';
-        setTimeout(function () { bar.style.transition = 'width 1s ease'; }, 50);
-        setTimeout(next, 1400);
-      }, 3200);
-      return;
+// ── EXPORT PPTX SHORTLIST ─────────────────────────────────────────────
+async function collectFromShortlist(btn, did) {
+  if (!currentProjetId) return;
+  btn.disabled = true; btn.textContent = '⏳…';
+  // Récupérer les infos du dispositif shortlist
+  var res_d = await fetch(API + '/api/veille360/sessions/' + currentProjetId + '/dispositifs');
+  var disps = await res_d.json();
+  var disp = disps.find(function(d){ return d.id === did; });
+  if (!disp || !disp.source_url) { btn.disabled=false; btn.textContent='📋 Fiche complète'; showToast('URL source manquante'); return; }
+  try {
+    // Appel /api/collect pour enrichir la fiche via Claude
+    var res = await fetch(API + '/api/collect', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({url: disp.source_url, title: disp.titre, id: 0, pdf_url: ''})
+    });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+    // Sauvegarder dans dispositifs globaux
+    var res2 = await fetch(API + '/api/dispositifs', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    });
+    var saved = await res2.json();
+    // Mettre à jour la carte shortlist avec les données enrichies
+    await fetch(API + '/api/veille360/sessions/' + currentProjetId + '/dispositifs/' + did, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        statut: disp.statut,
+        notes: 'Fiche collectée le ' + new Date().toLocaleDateString('fr-FR'),
+        contact: data.contact || disp.contact || ''
+      })
+    });
+    btn.textContent = '✅ Collecté';
+    btn.style.cssText = 'background:rgba(62,207,122,.12);border-color:rgba(62,207,122,.4);color:#1a7a40;';
+    showToast('Fiche complète collectée !');
+    if (saved.id) {
+      // Bouton PPTX apparaît
+      var actionsDiv = btn.parentElement;
+      var pptxBtn = document.createElement('button');
+      pptxBtn.className = 'ep-disp-btn pptx';
+      pptxBtn.textContent = '📊 PPTX';
+      pptxBtn.onclick = function(){ window.open(API + '/api/dispositifs/' + saved.id + '/export-pptx', '_blank'); };
+      actionsDiv.insertBefore(pptxBtn, btn.nextSibling);
     }
-    var l   = logs[s];
-    var div = document.createElement('div');
-    div.className = 'tline';
-    div.innerHTML = '<span class="ttag ' + cm[l.t] + '">' + lm[l.t] + '</span>'
-                  + '<span class="ttxt">' + l.l + '</span>';
-    logEl.appendChild(div);
-    while (logEl.children.length > 5) logEl.removeChild(logEl.children[0]);
-    var p = Math.round((s + 1) / logs.length * 100);
-    bar.style.width = p + '%';
-    st.textContent  = (s + 1) + '/' + logs.length + ' articles';
-    pct.textContent = p + '%';
-    s++;
-    setTimeout(next, s === logs.length ? 500 : 900 + Math.random() * 500);
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '📋 Fiche complète';
+    showToast('Erreur : ' + e.message);
   }
-  setTimeout(next, 800);
-})();
-</script>
-</body>
-</html>
+}
+
+function exportDispPptxFromShortlist(did) {
+  window.open(API + '/api/dispositifs/' + did + '/export-pptx', '_blank');
+}
+
+async function exportProjetPptx() {
+  showToast('Export en cours…');
+  // Récupérer tous les dispositifs et exporter le premier (à étendre)
+  var res = await fetch(API + '/api/veille360/sessions/' + currentProjetId + '/dispositifs');
+  var disps = await res.json();
+  if (!disps.length) { showToast('Aucun dispositif dans la shortlist'); return; }
+  // Pour l'instant : ouvrir le PPTX du premier dispositif retenu
+  disps.forEach(function(d, i){ setTimeout(function(){ window.open(API + '/api/dispositifs/' + d.id + '/export-pptx', '_blank'); }, i*500); });
+}
+
+// ── NOTES ──────────────────────────────────────────────────────────────
+function autoSaveNotes() {
+  clearTimeout(notesSaveTimer);
+  document.getElementById('ep-notes-saved').textContent = '…';
+  notesSaveTimer = setTimeout(async function(){
+    var notes = document.getElementById('ep-notes-area').value;
+    await fetch(API + '/api/veille360/sessions/' + currentProjetId + '/notes', {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({notes: notes})
+    });
+    document.getElementById('ep-notes-saved').textContent = '✓ Sauvegardé';
+    setTimeout(function(){ document.getElementById('ep-notes-saved').textContent = ''; }, 2000);
+  }, 1500);
+}
+
+>
 """
 
 
@@ -7989,6 +7624,102 @@ def delete_veille360_session(sid):
     cur.execute("DELETE FROM veille360_sessions WHERE id=%s", (sid,))
     conn.commit(); cur.close(); conn.close()
     return jsonify({'status': 'deleted'})
+
+@app.route('/api/veille360/sessions/<int:sid>/dispositifs', methods=['GET'])
+def get_projet_dispositifs(sid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT * FROM projet_dispositifs WHERE session_id=%s ORDER BY created_at DESC", (sid,))
+    rows = cur.fetchall(); cur.close(); conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/veille360/sessions/<int:sid>/dispositifs', methods=['POST'])
+def add_projet_dispositif(sid):
+    data = request.get_json()
+    conn = get_db(); cur = conn.cursor()
+    fields = ['session_id','titre','guichet_financeur','nature','beneficiaire','territoire',
+              'type_depot','date_fermeture','montants_taux','objectif','operations_eligibles',
+              'depenses_eligibles','criteres_eligibilite','points_vigilance','contact','source_url','statut','notes']
+    vals = [sid] + [data.get(f,'') for f in fields[1:]]
+    cols = ','.join(fields)
+    phs  = ','.join(['%s']*len(fields))
+    # Eviter doublon sur source_url
+    if data.get('source_url'):
+        cur.execute("SELECT id FROM projet_dispositifs WHERE session_id=%s AND source_url=%s", (sid, data['source_url']))
+        if cur.fetchone():
+            cur.close(); conn.close()
+            return jsonify({'status':'duplicate'}), 200
+    cur.execute(f"INSERT INTO projet_dispositifs ({cols}) VALUES ({phs}) RETURNING id", vals)
+    new_id = cur.fetchone()['id']
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'id': new_id, 'status': 'ok'})
+
+@app.route('/api/veille360/sessions/<int:sid>/dispositifs/<int:did>', methods=['PATCH'])
+def update_projet_dispositif(sid, did):
+    data = request.get_json()
+    conn = get_db(); cur = conn.cursor()
+    allowed = ['statut','notes','contact']
+    sets = ', '.join(f"{k}=%s" for k in data if k in allowed)
+    vals = [data[k] for k in data if k in allowed] + [did, sid]
+    if sets:
+        cur.execute(f"UPDATE projet_dispositifs SET {sets} WHERE id=%s AND session_id=%s", vals)
+        conn.commit()
+    cur.close(); conn.close()
+    return jsonify({'status':'ok'})
+
+@app.route('/api/veille360/sessions/<int:sid>/dispositifs/<int:did>', methods=['DELETE'])
+def delete_projet_dispositif(sid, did):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("DELETE FROM projet_dispositifs WHERE id=%s AND session_id=%s", (did, sid))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'status':'deleted'})
+
+@app.route('/api/veille360/sessions/<int:sid>/notes', methods=['PATCH'])
+def update_projet_notes(sid):
+    data = request.get_json()
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("UPDATE veille360_sessions SET notes=%s WHERE id=%s", (data.get('notes',''), sid))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'status':'ok'})
+
+@app.route('/api/veille360/sessions/<int:sid>/contact', methods=['POST'])
+def generate_contact_email(sid):
+    """Génère un email de contact pour un dispositif via Claude."""
+    if not ANTHROPIC_API_KEY:
+        return jsonify({'error': 'API key missing'}), 500
+    data = request.get_json()
+    disp = data.get('dispositif', {})
+    client = data.get('client_name', '')
+    project = data.get('project_desc', '')
+    prompt = f"""Tu es un consultant en financement public. Rédige un email professionnel et concis pour contacter l'instructeur du dispositif suivant.
+
+Client : {client}
+Projet : {project}
+Dispositif : {disp.get('titre','')}
+Financeur : {disp.get('guichet_financeur','')}
+Contact connu : {disp.get('contact','')}
+
+L'email doit :
+- Se présenter brièvement en tant que consultant mandaté
+- Décrire le projet en 2 phrases
+- Demander confirmation de l'éligibilité et les prochaines étapes
+- Rester sous 150 mots
+- Ton : professionnel et direct
+
+Retourne UNIQUEMENT l'email (objet + corps), sans commentaire."""
+
+    try:
+        payload = json.dumps({"model":"claude-haiku-4-5-20251001","max_tokens":400,
+            "messages":[{"role":"user","content":prompt}]}).encode()
+        req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={
+            "Content-Type":"application/json","x-api-key":ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01"
+        }, method="POST")
+        with urlopen(req, timeout=20) as resp:
+            result = json.loads(resp.read())
+        email_text = result["content"][0]["text"].strip()
+        return jsonify({'email': email_text})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/journal', methods=['GET'])
 def get_journal_editions():
