@@ -7899,106 +7899,333 @@ LANDING_PAGE = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SubstanCiel — Veille Subventions & Financements</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<title>SubstanCiel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
 :root {
-  --bg: #f2f4f0; --surface: #ffffff;
-  --accent: #1a3c2e; --accent2: #2a5c46;
-  --lime: #c8e84e; --lime2: #b0d035;
-  --lime-bg: rgba(200,232,78,0.12);
-  --text: #111a14; --muted: #7a8e80; --border: #e0e5d8;
-  --shadow-lg: 0 8px 40px rgba(26,60,46,0.16);
-  --radius-lg: 16px;
+  --accent:  #1a3c2e;
+  --accent2: #1f4a38;
+  --accent3: #2a5c46;
+  --lime:    #c8e84e;
+  --lime2:   #b0d035;
+  --lime-bg: rgba(200,232,78,0.10);
+  --bg:      #f2f4f0;
+  --surface: #ffffff;
+  --text:    #111a14;
+  --text2:   #3a4a3e;
+  --muted:   #7a8e80;
+  --border:  #e0e5d8;
+  --shadow:  0 2px 8px rgba(26,60,46,0.08);
+  --shadow-md: 0 6px 24px rgba(26,60,46,0.11);
+  --shadow-lg: 0 16px 48px rgba(26,60,46,0.15);
 }
-body {
-  font-family: 'DM Sans', sans-serif;
+
+html, body {
+  height: 100%;
+  font-family: 'DM Sans', system-ui, sans-serif;
   background: var(--accent);
-  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ── PAGE ── */
+.page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── NOISE TEXTURE ── */
+.page::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 0;
+}
+
+/* ── GLOW BLOBS ── */
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 0;
+}
+.blob-1 { width: 600px; height: 600px; background: var(--lime); top: -200px; left: 50%; transform: translateX(-50%); animation: float 14s ease-in-out infinite alternate; }
+.blob-2 { width: 300px; height: 300px; background: #5adf7a; bottom: 0; left: -60px; animation: float 10s ease-in-out infinite alternate-reverse; }
+.blob-3 { width: 200px; height: 200px; background: var(--lime2); bottom: 80px; right: 60px; animation: float 8s ease-in-out infinite alternate; }
+
+@keyframes float { 0% { transform: translateY(0) scale(1); } 100% { transform: translateY(20px) scale(1.05); } }
+.blob-1 { animation: floatCenter 14s ease-in-out infinite alternate; }
+@keyframes floatCenter { 0% { transform: translateX(-50%) translateY(0); } 100% { transform: translateX(-50%) translateY(24px); } }
+
+/* ── HEADER ── */
+header {
+  position: relative; z-index: 10;
+  display: flex; align-items: center;
+  padding: 24px 48px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.logo {
+  display: flex; align-items: center; gap: 10px;
+}
+.logo-mark {
+  width: 34px; height: 34px;
+  background: var(--lime);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.logo-mark svg { width: 17px; height: 17px; }
+.logo-name {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800; font-size: 17px;
+  color: #fff; letter-spacing: -0.3px;
+}
+.logo-name span { color: var(--lime); }
+
+.header-pill {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10.5px; font-weight: 600;
+  color: rgba(200,232,78,0.65);
+  letter-spacing: 0.09em; text-transform: uppercase;
+  border: 1px solid rgba(200,232,78,0.15);
+  padding: 5px 12px; border-radius: 100px;
+}
+.pulse {
+  width: 6px; height: 6px;
+  background: var(--lime2); border-radius: 50%;
+  animation: pulse 2.2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.7)} }
+
+/* ── HERO ── */
+.hero {
+  flex: 1;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  overflow: hidden; position: relative;
-}
-.bg-orb { position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.18; pointer-events: none; animation: drift 12s ease-in-out infinite alternate; }
-.bg-orb-1 { width: 520px; height: 520px; background: var(--lime); top: -120px; right: -80px; }
-.bg-orb-2 { width: 380px; height: 380px; background: var(--lime2); bottom: -100px; left: -60px; animation-delay: -5s; }
-.bg-orb-3 { width: 220px; height: 220px; background: #c8e84e; top: 50%; left: 50%; transform: translate(-50%,-50%); animation-delay: -3s; }
-@keyframes drift { 0% { transform: translate(0,0) scale(1); } 100% { transform: translate(30px,20px) scale(1.08); } }
-.card {
+  text-align: center;
+  padding: 0 24px 24px;
   position: relative; z-index: 10;
-  background: var(--surface);
-  border-radius: 24px;
-  padding: 56px 64px 52px;
-  max-width: 580px; width: calc(100% - 40px);
-  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(200,232,78,0.08);
-  display: flex; flex-direction: column; align-items: center; text-align: center;
-  animation: fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) both;
+  gap: 0;
 }
-@keyframes fadeUp { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
-.logo-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 36px; }
-.logo-icon { width: 46px; height: 46px; background: var(--accent); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.logo-icon svg { width: 24px; height: 24px; }
-.logo-text { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 26px; color: var(--accent); letter-spacing: -0.5px; }
-.logo-text span { color: var(--lime2); }
-.badge { display: inline-flex; align-items: center; gap: 6px; background: var(--lime-bg); border: 1px solid rgba(200,232,78,0.35); color: #3a5a1e; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 12px; border-radius: 100px; margin-bottom: 20px; }
-.badge-dot { width: 6px; height: 6px; background: var(--lime2); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
-@keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.5; transform:scale(0.75); } }
-h1 { font-family: 'Syne', sans-serif; font-size: 34px; font-weight: 800; color: var(--accent); line-height: 1.15; letter-spacing: -0.5px; margin-bottom: 14px; }
-h1 em { font-style: normal; color: var(--lime2); }
-.sub { font-size: 15px; color: var(--muted); line-height: 1.6; max-width: 400px; margin-bottom: 40px; }
-.btn-group { display: flex; flex-direction: column; gap: 12px; width: 100%; }
-.btn { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-radius: var(--radius-lg); text-decoration: none; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 14px; transition: all 0.18s cubic-bezier(0.16,1,0.3,1); border: 1.5px solid transparent; }
-.btn-primary { background: var(--accent); color: var(--lime); border-color: var(--accent); }
-.btn-primary:hover { background: var(--accent2); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(26,60,46,0.22); }
-.btn-secondary { background: var(--bg); color: var(--accent); border-color: var(--border); }
-.btn-secondary:hover { background: var(--lime-bg); border-color: rgba(200,232,78,0.5); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(26,60,46,0.08); }
-.btn-label { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-.btn-title { font-size: 14px; font-weight: 700; }
-.btn-sub { font-size: 11px; opacity: 0.65; font-weight: 400; }
-.btn-arrow { font-size: 18px; transition: transform 0.18s; }
-.btn:hover .btn-arrow { transform: translateX(4px); }
-.footer { margin-top: 32px; font-size: 11px; color: rgba(255,255,255,0.35); position: relative; z-index: 10; letter-spacing: 0.04em; }
-@media (max-width: 480px) { .card { padding: 36px 28px 32px; } h1 { font-size: 26px; } }
+
+.hero-eyebrow {
+  font-size: 11px; font-weight: 600;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(42px, 5.5vw, 68px);
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.0;
+  letter-spacing: -2px;
+  margin-bottom: 20px;
+}
+h1 .lime { color: var(--lime); }
+h1 .dim  { color: rgba(255,255,255,0.25); font-weight: 700; }
+
+.hero-desc {
+  font-size: 15px; font-weight: 300;
+  color: rgba(255,255,255,0.4);
+  line-height: 1.65;
+  max-width: 420px;
+  margin-bottom: 44px;
+}
+
+/* ── CARDS ── */
+.cards {
+  display: flex; gap: 14px;
+  width: 100%; max-width: 640px;
+}
+
+.card {
+  flex: 1;
+  text-decoration: none;
+  border-radius: 18px;
+  padding: 24px 26px;
+  display: flex; flex-direction: column;
+  transition: transform 0.22s cubic-bezier(0.16,1,0.3,1), box-shadow 0.22s;
+  position: relative; overflow: hidden;
+}
+.card:hover { transform: translateY(-4px); }
+
+.card-primary {
+  background: var(--lime);
+}
+.card-primary:hover {
+  box-shadow: 0 18px 48px rgba(200,232,78,0.25);
+}
+
+.card-secondary {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  backdrop-filter: blur(12px);
+}
+.card-secondary:hover {
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.18);
+  box-shadow: 0 18px 48px rgba(0,0,0,0.2);
+}
+
+.card-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.card-icon {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px;
+}
+.card-primary .card-icon { background: rgba(26,60,46,0.12); }
+.card-secondary .card-icon { background: rgba(255,255,255,0.08); }
+
+.card-arrow {
+  font-size: 20px;
+  transition: transform 0.2s;
+}
+.card-primary .card-arrow { color: var(--accent); }
+.card-secondary .card-arrow { color: rgba(255,255,255,0.4); }
+.card:hover .card-arrow { transform: translate(3px,-3px); }
+
+.card-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px; font-weight: 800;
+  letter-spacing: -0.3px;
+  margin-bottom: 6px;
+}
+.card-primary .card-title { color: var(--accent); }
+.card-secondary .card-title { color: #fff; }
+
+.card-desc {
+  font-size: 12px; line-height: 1.55;
+}
+.card-primary .card-desc { color: rgba(26,60,46,0.6); }
+.card-secondary .card-desc { color: rgba(255,255,255,0.38); }
+
+.card-tags {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  margin-top: 16px;
+}
+.tag {
+  font-size: 9.5px; font-weight: 700;
+  padding: 3px 8px; border-radius: 100px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.card-primary .tag { background: rgba(26,60,46,0.1); color: var(--accent); }
+.card-secondary .tag { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.45); border: 1px solid rgba(255,255,255,0.08); }
+
+/* ── FOOTER ── */
+footer {
+  position: relative; z-index: 10;
+  text-align: center;
+  padding: 16px;
+  font-size: 10.5px; color: rgba(255,255,255,0.18);
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 600px) {
+  header { padding: 18px 24px; }
+  h1 { font-size: 36px; letter-spacing: -1px; }
+  .cards { flex-direction: column; max-width: 380px; }
+  html, body { overflow: auto; }
+  .page { height: auto; min-height: 100vh; }
+}
 </style>
 </head>
 <body>
-<div class="bg-orb bg-orb-1"></div>
-<div class="bg-orb bg-orb-2"></div>
-<div class="bg-orb bg-orb-3"></div>
-<div class="card">
-  <div class="logo-wrap">
-    <div class="logo-icon">
-      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 3L4 7v5c0 4.418 3.134 8.555 8 9.93C17.866 20.555 21 16.418 21 12V7L12 3z" fill="#c8e84e" opacity="0.9"/>
-        <path d="M9 12l2 2 4-4" stroke="#1a3c2e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
+<div class="page">
+
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L3 7v5c0 4.97 3.8 9.63 9 10.93C17.2 21.63 21 16.97 21 12V7L12 2z" fill="#1a3c2e"/>
+          <path d="M8.5 12l2.5 2.5 4.5-5" stroke="#c8e84e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="logo-name">Substan<span>Ciel</span></div>
     </div>
-    <div class="logo-text">Substan<span>Ciel</span></div>
+    <div class="header-pill">
+      <span class="pulse"></span>
+      Veille active
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <div class="hero">
+    <p class="hero-eyebrow">Financement public · Intelligence artificielle</p>
+
+    <h1>
+      Les bons financements<br>
+      <span class="lime">au bon moment</span><br>
+      <span class="dim">pour vos clients</span>
+    </h1>
+
+    <p class="hero-desc">
+      Agrégation de subventions et appels à projets nationaux et régionaux — qualifiés et structurés par IA pour les consultants en financement.
+    </p>
+
+    <!-- CARTES -->
+    <div class="cards">
+
+      <a href="/app" class="card card-primary">
+        <div class="card-header">
+          <div class="card-icon">🔭</div>
+          <span class="card-arrow">↗</span>
+        </div>
+        <div class="card-title">Espace Veille</div>
+        <div class="card-desc">Parcourez, filtrez et qualifiez les dispositifs de financement en temps réel.</div>
+        <div class="card-tags">
+          <span class="tag">Curation IA</span>
+          <span class="tag">70+ sources</span>
+          <span class="tag">Multi-régions</span>
+        </div>
+      </a>
+
+      <a href="/consultant" class="card card-secondary">
+        <div class="card-header">
+          <div class="card-icon">📋</div>
+          <span class="card-arrow">↗</span>
+        </div>
+        <div class="card-title">Espace Collecte</div>
+        <div class="card-desc">Collectez et exportez les fiches. Pré-veille 360° et journal par client.</div>
+        <div class="card-tags">
+          <span class="tag">Pré-veille 360°</span>
+          <span class="tag">Export PPTX</span>
+          <span class="tag">Journal</span>
+        </div>
+      </a>
+
+    </div>
   </div>
-  <div class="badge"><span class="badge-dot"></span>Veille active · Financements publics</div>
-  <h1>Trouvez les <em>bons financements</em>,<br>au bon moment</h1>
-  <p class="sub">Agrégation intelligente de subventions et appels à projets nationaux et régionaux — analysés et qualifiés par IA pour vos clients.</p>
-  <div class="btn-group">
-    <a href="/app" class="btn btn-primary">
-      <div class="btn-label">
-        <span class="btn-title">Espace Veille</span>
-        <span class="btn-sub">Parcourir et qualifier les dispositifs</span>
-      </div>
-      <span class="btn-arrow">→</span>
-    </a>
-    <a href="/consultant" class="btn btn-secondary">
-      <div class="btn-label">
-        <span class="btn-title">Espace Consultant</span>
-        <span class="btn-sub">Collecte, pré-veille 360° et journal</span>
-      </div>
-      <span class="btn-arrow">→</span>
-    </a>
-  </div>
+
+  <footer>SubstanCiel · Outil interne de veille subventions</footer>
+
 </div>
-<p class="footer">SubstanCiel · Outil interne de veille subventions</p>
 </body>
-</html>"""
+</html>
+"""
+
 
 @app.route('/')
 def index():
