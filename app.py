@@ -2163,11 +2163,11 @@ async function loadJournalHistory() {
     }
     list.innerHTML = editions.map(function(e) {
       var d = e.edition_date || e.created_at.slice(0,10);
-      return '<div class="journal-hist-item" onclick="loadJournalEdition(' + e.id + ')">' +
+      return '<div class="journal-hist-item" data-jid="' + e.id + '" onclick="loadJournalEditionById(this)">' +
         '<div style="font-size:22px;">📰</div>' +
         '<div class="journal-hist-title">' + (e.title || 'Journal SubstanCiel') + '</div>' +
         '<div class="journal-hist-meta">' + d + '</div>' +
-        '<button onclick="deleteJournalEdition(event,' + e.id + ')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:4px;">✕</button>' +
+        '<button data-jid="' + e.id + '" onclick="deleteJournalEditionById(event,this)" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:4px;">✕</button>' +
         '</div>';
     }).join('');
   } catch(e) {
@@ -2416,6 +2416,16 @@ function refreshDispositifs() {
   if (btn) { btn.classList.add('spinning'); setTimeout(function(){ btn.classList.remove('spinning'); }, 500); }
   loadDispositifs();
 }
+
+function loadJournalEditionById(el) { loadJournalEdition(parseInt(el.getAttribute('data-jid'))); }
+function deleteJournalEditionById(e, btn) { deleteJournalEdition(e, parseInt(btn.getAttribute('data-jid'))); }
+function openDispPptxById(btn) { openDispPptx(parseInt(btn.getAttribute('data-did'))); }
+function openProjetById(el) { openProjet(parseInt(el.getAttribute('data-sid'))); }
+function deleteProjetById(e, btn) { deleteProjet(e, parseInt(btn.getAttribute('data-sid'))); }
+function collectFromShortlistById(btn) { collectFromShortlist(btn, parseInt(btn.getAttribute('data-did'))); }
+function generateEmailById(btn) { generateEmail(parseInt(btn.getAttribute('data-did'))); }
+function removeFromShortlistById(btn) { removeFromShortlist(parseInt(btn.getAttribute('data-did'))); }
+function changeStatutById(sel) { changeStatut(sel, parseInt(sel.getAttribute('data-did'))); }
 
 async function init() {
   buildSidebar();
@@ -2791,7 +2801,7 @@ function renderDispTable(list) {
       '<td>' + cell(d.programme_europeen) + '</td>' +
       '<td>' + cell(d.contact) + '</td>' +
       '<td style="text-align:center;white-space:nowrap;">' +
-        '<button class="dt-export-btn" onclick="openDispPptx(' + (d.id||0) + ')">📊 PPTX</button>' +
+        '<button class="dt-export-btn" data-did="' + (d.id||0) + '" onclick="openDispPptxById(this)">📊 PPTX</button>' +
       '</td>' +
       '</tr>';
   }).join('');
@@ -2966,7 +2976,7 @@ async function loadV360Sessions() {
     list.innerHTML = sessions.map(function(s) {
       var date = s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : '';
       var desc = (s.project_desc||'').slice(0,80) + ((s.project_desc||'').length > 80 ? '…' : '');
-      return '<div class="ep-project-card" onclick="openProjet(' + s.id + ',this)">' +
+      return '<div class="ep-project-card" data-sid="' + s.id + '" onclick="openProjetById(this)">' +
         '<div class="ep-project-card-icon">🗂</div>' +
         '<div class="ep-project-card-main">' +
           '<div class="ep-project-card-client">' + (s.client_name||'Sans nom') + '</div>' +
@@ -2974,7 +2984,7 @@ async function loadV360Sessions() {
           '<div class="ep-project-card-meta">' + date + '</div>' +
         '</div>' +
         '<div class="ep-project-card-actions">' +
-          '<button class="ep-del-btn" onclick="deleteProjet(event,' + s.id + ')">✕</button>' +
+          '<button class="ep-del-btn" data-sid="' + s.id + '" onclick="deleteProjetById(event,this)">✕</button>' +
         '</div></div>';
     }).join('');
   } catch(e) { list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Erreur</div></div>'; }
@@ -3116,14 +3126,14 @@ async function loadProjetShortlist() {
         '<div class="ep-disp-card-fin">' + (d.guichet_financeur||'') + (d.nature?' · '+d.nature:'') + '</div>' +
         (d.montants_taux ? '<div style="font-size:10px;color:var(--accent);font-weight:700;">' + d.montants_taux.slice(0,60) + '</div>' : '') +
         '<div class="ep-disp-card-actions">' +
-          '<select class="ep-statut-sel" onchange="changeStatut(this,' + d.id + ')">' +
+          '<select class="ep-statut-sel" data-did="' + d.id + '" onchange="changeStatutById(this)">' +
             '<option value="identifie"' + (d.statut==='identifie'?' selected':'') + '>🔵 Identifié</option>' +
             '<option value="en_cours"' + (d.statut==='en_cours'?' selected':'') + '>🟡 En cours</option>' +
             '<option value="depose"' + (d.statut==='depose'?' selected':'') + '>🟢 Déposé</option>' +
           '</select>' +
-          '<button class="ep-disp-btn pptx" onclick="collectFromShortlist(this,' + d.id + ')">📋 Fiche complète</button>' +
-          '<button class="ep-disp-btn email" onclick="generateEmail(' + d.id + ')">📧 Contact</button>' +
-          '<button class="ep-disp-btn del" onclick="removeFromShortlist(' + d.id + ')">✕</button>' +
+          '<button class="ep-disp-btn pptx" data-did="' + d.id + '" onclick="collectFromShortlistById(this)">📋 Fiche complète</button>' +
+          '<button class="ep-disp-btn email" data-did="' + d.id + '" onclick="generateEmailById(this)">📧 Contact</button>' +
+          '<button class="ep-disp-btn del" data-did="' + d.id + '" onclick="removeFromShortlistById(this)">✕</button>' +
         '</div></div>';
     }).join('');
   });
