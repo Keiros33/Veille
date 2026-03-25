@@ -1830,6 +1830,7 @@ body {
           <option>Clôturé</option><option>En attente de renouvellement</option>
         </select>
         <span class="result-count" id="disp-count" style="margin-left:auto;">— dispositifs</span>
+        <button onclick="openManualCollect()" class="disp-refresh-btn" style="margin-left:8px;background:var(--accent);color:var(--lime);border-color:var(--accent);padding:6px 14px;font-weight:700;font-size:11px;" title="Collecter depuis un lien">➕ Collecte manuelle</button>
       </div>
       <!-- Vue cartes (bibliothèque) -->
       <div class="disp-grid" id="disp-grid">
@@ -2125,6 +2126,39 @@ body {
     <div class="modal-footer">
       <button class="modal-close" onclick="closeModal()">Fermer</button>
       <button class="modal-pptx" id="modal-pptx-btn" onclick="exportDispPptx()">📊 Exporter PPTX</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL COLLECTE MANUELLE -->
+<div id="manual-collect-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--radius-lg);width:680px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;">
+    <!-- Header -->
+    <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--accent);">➕ Collecte manuelle</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Collez un lien de dispositif — l'IA extrait les 19 champs. Si un cahier des charges est détecté, il est analysé en priorité.</div>
+      </div>
+      <button onclick="closeManualCollect()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--muted);padding:4px 8px;">✕</button>
+    </div>
+    <!-- URL input -->
+    <div style="padding:18px 24px 12px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <input id="mc-url-input" type="url" placeholder="https://…" style="flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;" oninput="document.getElementById('mc-url-input').style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter') runManualCollect()">
+        <button id="mc-run-btn" onclick="runManualCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:var(--radius);padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">🔍 Analyser</button>
+      </div>
+      <div id="mc-cdc-status" style="margin-top:8px;font-size:11px;color:var(--muted);min-height:16px;"></div>
+    </div>
+    <!-- Result area -->
+    <div id="mc-result-area" style="padding:16px 24px;flex:1;">
+      <div style="text-align:center;color:var(--muted);font-size:12px;padding:24px 0;">
+        Entrez une URL et cliquez sur <strong>Analyser</strong> pour extraire la fiche dispositif.
+      </div>
+    </div>
+    <!-- Footer -->
+    <div id="mc-footer" style="display:none;padding:14px 24px;border-top:1px solid var(--border);display:none;gap:10px;justify-content:flex-end;flex-shrink:0;">
+      <button onclick="closeManualCollect()" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 18px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Annuler</button>
+      <button id="mc-save-btn" onclick="saveManualCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:var(--radius);padding:8px 20px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">💾 Sauvegarder dans la base</button>
     </div>
   </div>
 </div>
@@ -2888,6 +2922,127 @@ function renderDispTable(list) {
   }).join('');
 }
 
+
+// ── COLLECTE MANUELLE ─────────────────────────────────────────────────
+var manualCollectData = null;
+
+function openManualCollect() {
+  manualCollectData = null;
+  document.getElementById('mc-url-input').value = '';
+  document.getElementById('mc-cdc-status').textContent = '';
+  document.getElementById('mc-result-area').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:24px 0;">Entrez une URL et cliquez sur <strong>Analyser</strong> pour extraire la fiche dispositif.</div>';
+  document.getElementById('mc-footer').style.display = 'none';
+  document.getElementById('mc-run-btn').disabled = false;
+  document.getElementById('mc-run-btn').textContent = '🔍 Analyser';
+  document.getElementById('manual-collect-modal').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('mc-url-input').focus(); }, 100);
+}
+
+function closeManualCollect() {
+  document.getElementById('manual-collect-modal').style.display = 'none';
+}
+
+async function runManualCollect() {
+  var url = document.getElementById('mc-url-input').value.trim();
+  if (!url) {
+    document.getElementById('mc-url-input').style.borderColor = 'var(--red, #c8392b)';
+    return;
+  }
+  var btn = document.getElementById('mc-run-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Analyse…';
+  document.getElementById('mc-cdc-status').textContent = 'Scraping de la page en cours…';
+  document.getElementById('mc-footer').style.display = 'none';
+  document.getElementById('mc-result-area').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:32px;color:var(--muted);"><div class="spinner"></div><div style="font-size:12px;">Recherche du cahier des charges et analyse IA…</div><div style="font-size:11px;opacity:0.7;">Peut prendre 15-25 secondes</div></div>';
+
+  try {
+    var res = await fetch(API + '/api/collect', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({url: url, title: ''})
+    });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    manualCollectData = data;
+    manualCollectData.source_url = url;
+
+    // CDC status feedback
+    var cdcMsg = '';
+    if (data.cdc_url) {
+      cdcMsg = '✅ Cahier des charges détecté et analysé en priorité : <a href="'+data.cdc_url+'" target="_blank" style="color:var(--accent);text-decoration:underline;">'+data.cdc_url.split('/').pop().substring(0,50)+'</a>';
+    } else {
+      cdcMsg = '⚠️ Pas de CDC détecté — analyse basée sur la page web uniquement';
+    }
+    document.getElementById('mc-cdc-status').innerHTML = cdcMsg;
+
+    // Render preview
+    var fields = [
+      ['Titre', data.titre],
+      ['Guichet financeur', data.guichet_financeur],
+      ['Guichet instructeur', data.guichet_instructeur],
+      ['Nature', data.nature],
+      ['Bénéficiaire', data.beneficiaire],
+      ['Type de dépôt', data.type_depot],
+      ['Date de fermeture', data.date_fermeture],
+      ['Objectif', data.objectif],
+      ['Types de dépenses', data.types_depenses],
+      ['Opérations éligibles', data.operations_eligibles],
+      ['Dépenses éligibles', data.depenses_eligibles],
+      ['Critères d\'éligibilité', data.criteres_eligibilite],
+      ['Dépenses inéligibles', data.depenses_ineligibles],
+      ['Montants et taux', data.montants_taux],
+      ['Thématiques', data.thematiques],
+      ['Territoire', data.territoire],
+      ['Points de vigilance', data.points_vigilance],
+      ['Contact', data.contact],
+      ['Programme européen', data.programme_europeen],
+    ];
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;">';
+    fields.forEach(function(f) {
+      var val = f[1] || '<span style="color:var(--muted2);font-style:italic;">Non renseigné</span>';
+      var isEmpty = !f[1] || f[1] === 'Information non fournie';
+      html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;' + (isEmpty ? 'opacity:0.55;' : '') + '">';
+      html += '<div style="font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">'+f[0]+'</div>';
+      html += '<div style="font-size:12px;color:var(--text);line-height:1.4;">'+val+'</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    document.getElementById('mc-result-area').innerHTML = html;
+    document.getElementById('mc-footer').style.display = 'flex';
+  } catch(e) {
+    document.getElementById('mc-cdc-status').textContent = '';
+    document.getElementById('mc-result-area').innerHTML = '<div style="background:rgba(200,57,43,0.07);border:1px solid rgba(200,57,43,0.2);border-radius:var(--radius);padding:16px;color:#a0291e;font-size:12px;">⚠️ Erreur : ' + e.message + '</div>';
+  }
+  btn.disabled = false;
+  btn.textContent = '🔍 Analyser';
+}
+
+async function saveManualCollect() {
+  if (!manualCollectData) return;
+  var btn = document.getElementById('mc-save-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Sauvegarde…';
+  try {
+    var res = await fetch(API + '/api/dispositifs', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(manualCollectData)
+    });
+    var saved = await res.json();
+    if (saved.status === 'duplicate') {
+      showToast('Ce dispositif est déjà dans la base !');
+    } else {
+      showToast('Dispositif ajouté à la base ✓');
+      closeManualCollect();
+      loadDispositifs();
+    }
+  } catch(e) {
+    showToast('Erreur lors de la sauvegarde : ' + e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = '💾 Sauvegarder dans la base';
+}
 
 // ── COLLECT ALL MISSING ───────────────────────────────────────────────
 function toggleCollectMenu() {
