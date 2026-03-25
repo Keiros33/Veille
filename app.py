@@ -213,6 +213,8 @@ FORMAT DE SORTIE ATTENDU (STRICT)
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 def get_db():
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL non configurée — vérifiez les variables d'environnement Render")
     return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
 
 def init_db():
@@ -8762,7 +8764,8 @@ def consultant():
 
 @app.route('/')
 def index():
-    return LANDING_PAGE, 200, {"Content-Type": "text/html; charset=utf-8"}
+    from flask import redirect
+    return redirect('/app')
 
 @app.route('/app')
 def app_page():
@@ -9382,9 +9385,23 @@ def start_scheduler():
     log.info("Scheduler started")
 
 if __name__ == '__main__':
-    init_db()
-    start_scheduler()
+    try:
+        init_db()
+    except Exception as e:
+        log.error(f"ERREUR init_db: {e}")
+    try:
+        start_scheduler()
+    except Exception as e:
+        log.error(f"ERREUR scheduler: {e}")
     app.run(host='0.0.0.0',port=int(os.environ.get('PORT',5000)))
 else:
-    init_db()
-    start_scheduler()
+    try:
+        init_db()
+        log.info("DB initialisée avec succès")
+    except Exception as e:
+        log.error(f"ERREUR init_db: {e}")
+        log.error("Le site démarrera mais la DB est inaccessible — vérifiez DATABASE_URL et Supabase")
+    try:
+        start_scheduler()
+    except Exception as e:
+        log.error(f"ERREUR scheduler: {e}")
