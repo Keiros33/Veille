@@ -3233,7 +3233,6 @@ async function loadPackages() {
     var html = '';
     pkgs.forEach(function(p) {
       var d = p.created_at ? new Date(p.created_at).toLocaleDateString('fr-FR') : '';
-      var safeName = p.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       html += '<div data-pkgid="' + p.id + '" data-pkgname="' + p.name.replace(/"/g,'&quot;') + '" class="pkg-card">';
       html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">';
       html += '<div style="width:38px;height:38px;background:var(--lime-bg);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;">&#x1F4E6;</div>';
