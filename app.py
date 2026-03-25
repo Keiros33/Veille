@@ -2114,21 +2114,6 @@ body {
 
     </div>
 
-  </main>
-</div>
-
-<!-- MODAL RÉSULTAT 360 -->
-<div id="v360-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border-radius:12px;width:92%;max-width:920px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);">
-    <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:12px 12px 0 0;">
-      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--accent);" id="v360-modal-title">Analyse 360°</div>
-      <button onclick="document.getElementById('v360-modal').style.display='none'"
-        style="background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--muted);">✕</button>
-    </div>
-    <div style="flex:1;overflow-y:auto;padding:16px 20px;font-size:12px;line-height:1.6;color:var(--text);" id="v360-modal-body"></div>
-  </div>
-</div>
-
     <!-- PANEL PACKAGES -->
     <div class="panel" id="panel-packages">
       <div class="disp-controls" style="justify-content:space-between;">
@@ -2146,6 +2131,23 @@ body {
         <div id="pkg-detail-grid" style="flex:1;overflow-y:auto;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;"></div>
       </div>
     </div>
+
+
+
+  </main>
+</div>
+
+<!-- MODAL RÉSULTAT 360 -->
+<div id="v360-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:12px;width:92%;max-width:920px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+    <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:12px 12px 0 0;">
+      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--accent);" id="v360-modal-title">Analyse 360°</div>
+      <button onclick="document.getElementById('v360-modal').style.display='none'"
+        style="background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--muted);">✕</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:16px 20px;font-size:12px;line-height:1.6;color:var(--text);" id="v360-modal-body"></div>
+  </div>
+</div>
 
 <!-- MODAL DISPOSITIF -->
 <div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
