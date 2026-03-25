@@ -7893,10 +7893,116 @@ def api_reorder_sources():
 def consultant():
     return CONSULTANT_PAGE, 200, {"Content-Type": "text/html; charset=utf-8"}
 
+
+LANDING_PAGE = """<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubstanCiel — Veille Subventions & Financements</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f2f4f0; --surface: #ffffff;
+  --accent: #1a3c2e; --accent2: #2a5c46;
+  --lime: #c8e84e; --lime2: #b0d035;
+  --lime-bg: rgba(200,232,78,0.12);
+  --text: #111a14; --muted: #7a8e80; --border: #e0e5d8;
+  --shadow-lg: 0 8px 40px rgba(26,60,46,0.16);
+  --radius-lg: 16px;
+}
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--accent);
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  overflow: hidden; position: relative;
+}
+.bg-orb { position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.18; pointer-events: none; animation: drift 12s ease-in-out infinite alternate; }
+.bg-orb-1 { width: 520px; height: 520px; background: var(--lime); top: -120px; right: -80px; }
+.bg-orb-2 { width: 380px; height: 380px; background: var(--lime2); bottom: -100px; left: -60px; animation-delay: -5s; }
+.bg-orb-3 { width: 220px; height: 220px; background: #c8e84e; top: 50%; left: 50%; transform: translate(-50%,-50%); animation-delay: -3s; }
+@keyframes drift { 0% { transform: translate(0,0) scale(1); } 100% { transform: translate(30px,20px) scale(1.08); } }
+.card {
+  position: relative; z-index: 10;
+  background: var(--surface);
+  border-radius: 24px;
+  padding: 56px 64px 52px;
+  max-width: 580px; width: calc(100% - 40px);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(200,232,78,0.08);
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  animation: fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) both;
+}
+@keyframes fadeUp { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
+.logo-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 36px; }
+.logo-icon { width: 46px; height: 46px; background: var(--accent); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.logo-icon svg { width: 24px; height: 24px; }
+.logo-text { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 26px; color: var(--accent); letter-spacing: -0.5px; }
+.logo-text span { color: var(--lime2); }
+.badge { display: inline-flex; align-items: center; gap: 6px; background: var(--lime-bg); border: 1px solid rgba(200,232,78,0.35); color: #3a5a1e; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 12px; border-radius: 100px; margin-bottom: 20px; }
+.badge-dot { width: 6px; height: 6px; background: var(--lime2); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.5; transform:scale(0.75); } }
+h1 { font-family: 'Syne', sans-serif; font-size: 34px; font-weight: 800; color: var(--accent); line-height: 1.15; letter-spacing: -0.5px; margin-bottom: 14px; }
+h1 em { font-style: normal; color: var(--lime2); }
+.sub { font-size: 15px; color: var(--muted); line-height: 1.6; max-width: 400px; margin-bottom: 40px; }
+.btn-group { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.btn { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-radius: var(--radius-lg); text-decoration: none; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 14px; transition: all 0.18s cubic-bezier(0.16,1,0.3,1); border: 1.5px solid transparent; }
+.btn-primary { background: var(--accent); color: var(--lime); border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent2); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(26,60,46,0.22); }
+.btn-secondary { background: var(--bg); color: var(--accent); border-color: var(--border); }
+.btn-secondary:hover { background: var(--lime-bg); border-color: rgba(200,232,78,0.5); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(26,60,46,0.08); }
+.btn-label { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.btn-title { font-size: 14px; font-weight: 700; }
+.btn-sub { font-size: 11px; opacity: 0.65; font-weight: 400; }
+.btn-arrow { font-size: 18px; transition: transform 0.18s; }
+.btn:hover .btn-arrow { transform: translateX(4px); }
+.footer { margin-top: 32px; font-size: 11px; color: rgba(255,255,255,0.35); position: relative; z-index: 10; letter-spacing: 0.04em; }
+@media (max-width: 480px) { .card { padding: 36px 28px 32px; } h1 { font-size: 26px; } }
+</style>
+</head>
+<body>
+<div class="bg-orb bg-orb-1"></div>
+<div class="bg-orb bg-orb-2"></div>
+<div class="bg-orb bg-orb-3"></div>
+<div class="card">
+  <div class="logo-wrap">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 3L4 7v5c0 4.418 3.134 8.555 8 9.93C17.866 20.555 21 16.418 21 12V7L12 3z" fill="#c8e84e" opacity="0.9"/>
+        <path d="M9 12l2 2 4-4" stroke="#1a3c2e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="logo-text">Substan<span>Ciel</span></div>
+  </div>
+  <div class="badge"><span class="badge-dot"></span>Veille active · Financements publics</div>
+  <h1>Trouvez les <em>bons financements</em>,<br>au bon moment</h1>
+  <p class="sub">Agrégation intelligente de subventions et appels à projets nationaux et régionaux — analysés et qualifiés par IA pour vos clients.</p>
+  <div class="btn-group">
+    <a href="/app" class="btn btn-primary">
+      <div class="btn-label">
+        <span class="btn-title">Espace Veille</span>
+        <span class="btn-sub">Parcourir et qualifier les dispositifs</span>
+      </div>
+      <span class="btn-arrow">→</span>
+    </a>
+    <a href="/consultant" class="btn btn-secondary">
+      <div class="btn-label">
+        <span class="btn-title">Espace Consultant</span>
+        <span class="btn-sub">Collecte, pré-veille 360° et journal</span>
+      </div>
+      <span class="btn-arrow">→</span>
+    </a>
+  </div>
+</div>
+<p class="footer">SubstanCiel · Outil interne de veille subventions</p>
+</body>
+</html>"""
+
 @app.route('/')
 def index():
-    from flask import redirect
-    return redirect('/app')
+    return LANDING_PAGE, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 @app.route('/app')
 def app_page():
