@@ -275,6 +275,16 @@ def init_db():
         created_at TIMESTAMP DEFAULT NOW()
     )""")
     cur.execute("CREATE TABLE IF NOT EXISTS journal_editions (id SERIAL PRIMARY KEY, title TEXT NOT NULL, edition_date DATE DEFAULT CURRENT_DATE, summaries JSONB NOT NULL DEFAULT '[]', created_at TIMESTAMP DEFAULT NOW())")
+    cur.execute("""CREATE TABLE IF NOT EXISTS packages (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
+    try:
+        cur.execute("ALTER TABLE dispositifs ADD COLUMN IF NOT EXISTS package_id INTEGER REFERENCES packages(id) ON DELETE SET NULL")
+        conn.commit()
+    except Exception:
+        conn.rollback()
 
     conn.commit(); cur.close(); conn.close()
     log.info("DB ready")
@@ -1711,6 +1721,7 @@ body {
     <button class="header-tab" onclick="switchTab('cdc', this)">📋 Cahiers des charges</button>
     <button class="header-tab" onclick="switchTab('journal', this)">📰 Journal</button>
     <button class="header-tab" onclick="switchTab('veille360', this)">🔍 Pré-veille 360°</button>
+    <button class="header-tab" onclick="switchTab('packages', this)">📦 Packages</button>
   </nav>
   <div class="header-search">
     <span class="header-search-icon">🔍</span>
@@ -2118,6 +2129,24 @@ body {
   </div>
 </div>
 
+    <!-- PANEL PACKAGES -->
+    <div class="panel" id="panel-packages">
+      <div class="disp-controls" style="justify-content:space-between;">
+        <span id="pkg-list-count" style="font-size:11px;color:var(--muted);">— packages</span>
+        <button onclick="openManualCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:6px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">➕ Nouvelle collecte</button>
+      </div>
+      <div id="pkg-list" style="padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"><div style="color:var(--muted);font-size:12px;text-align:center;padding:40px;grid-column:1/-1;">Chargement…</div></div>
+      <div id="pkg-detail" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+        <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0;">
+          <button onclick="closePkgDetail()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;">← Retour</button>
+          <span id="pkg-detail-name" style="font-family:'Syne',sans-serif;font-weight:800;font-size:15px;color:var(--accent);flex:1;"></span>
+          <span id="pkg-detail-count" style="font-size:11px;color:var(--muted);"></span>
+          <button onclick="exportPackagePptx()" style="background:var(--accent);color:var(--lime);border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">📊 Exporter PPTX</button>
+        </div>
+        <div id="pkg-detail-grid" style="flex:1;overflow-y:auto;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;"></div>
+      </div>
+    </div>
+
 <!-- MODAL DISPOSITIF -->
 <div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
   <div class="modal">
@@ -2131,38 +2160,81 @@ body {
 </div>
 
 <!-- MODAL COLLECTE MANUELLE -->
-<div id="manual-collect-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border-radius:var(--radius-lg);width:680px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;">
+<div id="manual-collect-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:16px;width:720px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(26,60,46,0.22);overflow:hidden;">
+
     <!-- Header -->
-    <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+    <div style="background:var(--accent);padding:18px 24px;display:flex;align-items:center;gap:14px;flex-shrink:0;">
+      <div style="width:36px;height:36px;background:var(--lime);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">➕</div>
       <div>
-        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--accent);">➕ Collecte manuelle</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Collez un lien de dispositif — l'IA extrait les 19 champs. Si un cahier des charges est détecté, il est analysé en priorité.</div>
+        <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:#fff;letter-spacing:-0.3px;">Collecte manuelle</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:1px;">Ajoutez un dispositif depuis un lien ou un fichier Excel</div>
       </div>
-      <button onclick="closeManualCollect()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--muted);padding:4px 8px;">✕</button>
+      <button onclick="closeManualCollect()" style="margin-left:auto;background:rgba(255,255,255,0.1);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;color:rgba(255,255,255,0.7);font-size:16px;display:flex;align-items:center;justify-content:center;">✕</button>
     </div>
-    <!-- URL input -->
-    <div style="padding:18px 24px 12px;border-bottom:1px solid var(--border);flex-shrink:0;">
-      <div style="display:flex;gap:10px;align-items:center;">
-        <input id="mc-url-input" type="url" placeholder="https://…" style="flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;" oninput="document.getElementById('mc-url-input').style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter') runManualCollect()">
-        <button id="mc-run-btn" onclick="runManualCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:var(--radius);padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">🔍 Analyser</button>
+
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface2);">
+      <button id="mc-tab-url" onclick="switchMcTab('url')" style="flex:1;padding:11px 0;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--surface);color:var(--accent);border-bottom:2px solid var(--accent);">🔗 Lien unique</button>
+      <button id="mc-tab-excel" onclick="switchMcTab('excel')" style="flex:1;padding:11px 0;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;background:transparent;color:var(--muted);border-bottom:2px solid transparent;">📊 Fichier Excel</button>
+    </div>
+
+    <!-- TAB : Lien unique -->
+    <div id="mc-pane-url" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+      <div style="padding:16px 24px 12px;border-bottom:1px solid var(--border);flex-shrink:0;">
+        <div style="display:flex;gap:10px;">
+          <input id="mc-url-input" type="url" placeholder="https://…" style="flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;" onkeydown="if(event.key==='Enter') runManualCollect()">
+          <button id="mc-run-btn" onclick="runManualCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:8px;padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">Analyser</button>
+        </div>
+        <div id="mc-cdc-status" style="margin-top:8px;font-size:11px;color:var(--muted);min-height:16px;"></div>
       </div>
-      <div id="mc-cdc-status" style="margin-top:8px;font-size:11px;color:var(--muted);min-height:16px;"></div>
-    </div>
-    <!-- Result area -->
-    <div id="mc-result-area" style="padding:16px 24px;flex:1;">
-      <div style="text-align:center;color:var(--muted);font-size:12px;padding:24px 0;">
-        Entrez une URL et cliquez sur <strong>Analyser</strong> pour extraire la fiche dispositif.
+      <div id="mc-result-area" style="padding:16px 24px;flex:1;overflow-y:auto;min-height:120px;">
+        <div style="text-align:center;color:var(--muted);font-size:12px;padding:32px 0;">Entrez une URL puis cliquez sur Analyser.</div>
+      </div>
+      <div id="mc-footer" style="display:none;padding:13px 24px;border-top:1px solid var(--border);display:none;gap:9px;justify-content:flex-end;flex-shrink:0;">
+        <button onclick="closeManualCollect()" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Annuler</button>
+        <button id="mc-save-btn" onclick="saveManualCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:7px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">💾 Sauvegarder</button>
       </div>
     </div>
-    <!-- Footer -->
-    <div id="mc-footer" style="display:none;padding:14px 24px;border-top:1px solid var(--border);display:none;gap:10px;justify-content:flex-end;flex-shrink:0;">
-      <button onclick="closeManualCollect()" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 18px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Annuler</button>
-      <button id="mc-save-btn" onclick="saveManualCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:var(--radius);padding:8px 20px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">💾 Sauvegarder dans la base</button>
+
+    <!-- TAB : Fichier Excel -->
+    <div id="mc-pane-excel" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+      <div style="padding:18px 24px;flex-shrink:0;border-bottom:1px solid var(--border);">
+        <!-- Drop zone -->
+        <div id="mc-dropzone" onclick="document.getElementById('mc-file-input').click()" style="border:2px dashed var(--border);border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:all 0.18s;">
+          <div style="font-size:28px;margin-bottom:8px;">📊</div>
+          <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:4px;">Cliquez ou glissez un fichier .xlsx</div>
+          <div style="font-size:11px;color:var(--muted);">URLs en colonne A · Feuille 1 · Max 20 liens</div>
+          <input id="mc-file-input" type="file" accept=".xlsx,.xls" style="display:none;" onchange="onExcelFileSelected(this)">
+        </div>
+        <div id="mc-file-name" style="margin-top:10px;font-size:11px;color:var(--accent);font-weight:600;text-align:center;display:none;"></div>
+
+        <!-- Package option -->
+        <div style="margin-top:16px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:13px 16px;">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;">
+            <input type="checkbox" id="mc-pkg-check" onchange="togglePkgName()" style="width:16px;height:16px;accent-color:var(--accent);">
+            <span style="font-size:12px;font-weight:600;color:var(--text);">Regrouper dans un Package</span>
+            <span style="font-size:11px;color:var(--muted);">— retrouvez tous ces dispositifs ensemble</span>
+          </label>
+          <div id="mc-pkg-name-wrap" style="display:none;margin-top:10px;">
+            <input id="mc-pkg-name" type="text" placeholder="Nom du package (ex: ESS Bretagne 2025)" style="width:100%;background:var(--surface);border:1.5px solid var(--border);border-radius:7px;padding:9px 13px;font-size:12px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress / results -->
+      <div id="mc-batch-area" style="padding:16px 24px;flex:1;overflow-y:auto;min-height:100px;">
+        <div style="text-align:center;color:var(--muted);font-size:12px;padding:28px 0;">Importez un fichier Excel pour démarrer la collecte.</div>
+      </div>
+
+      <div style="padding:13px 24px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;flex-shrink:0;">
+        <button onclick="closeManualCollect()" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Annuler</button>
+        <button id="mc-batch-btn" onclick="runBatchCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:7px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;" disabled>🚀 Lancer la collecte</button>
+      </div>
     </div>
+
   </div>
 </div>
-
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -2949,12 +3021,25 @@ var MC_FIELDS = [
 
 function openManualCollect() {
   manualCollectData = null;
+  mc_excel_file = null;
   document.getElementById('mc-url-input').value = '';
   document.getElementById('mc-cdc-status').textContent = '';
   document.getElementById('mc-result-area').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:24px 0;">Entrez une URL puis cliquez sur Analyser.</div>';
   document.getElementById('mc-footer').style.display = 'none';
   document.getElementById('mc-run-btn').disabled = false;
   document.getElementById('mc-run-btn').textContent = 'Analyser';
+  document.getElementById('mc-batch-area').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:28px 0;">Importez un fichier Excel pour démarrer la collecte.</div>';
+  document.getElementById('mc-batch-btn').disabled = true;
+  document.getElementById('mc-batch-btn').textContent = 'Lancer la collecte';
+  document.getElementById('mc-batch-btn').onclick = runBatchCollect;
+  document.getElementById('mc-file-name').style.display = 'none';
+  document.getElementById('mc-file-input').value = '';
+  document.getElementById('mc-dropzone').style.borderColor = 'var(--border)';
+  document.getElementById('mc-dropzone').style.background = '';
+  document.getElementById('mc-pkg-check').checked = false;
+  document.getElementById('mc-pkg-name-wrap').style.display = 'none';
+  document.getElementById('mc-pkg-name').value = '';
+  switchMcTab('url');
   document.getElementById('manual-collect-modal').style.display = 'flex';
   setTimeout(function(){ document.getElementById('mc-url-input').focus(); }, 100);
 }
@@ -3032,6 +3117,181 @@ async function saveManualCollect() {
   }
   btn.disabled = false;
   btn.textContent = 'Sauvegarder';
+}
+
+// ── MODAL TABS ────────────────────────────────────────────────────────
+function switchMcTab(tab) {
+  document.getElementById('mc-pane-url').style.display = tab === 'url' ? 'flex' : 'none';
+  document.getElementById('mc-pane-excel').style.display = tab === 'excel' ? 'flex' : 'none';
+  document.getElementById('mc-tab-url').style.background = tab === 'url' ? 'var(--surface)' : 'transparent';
+  document.getElementById('mc-tab-url').style.color = tab === 'url' ? 'var(--accent)' : 'var(--muted)';
+  document.getElementById('mc-tab-url').style.borderBottomColor = tab === 'url' ? 'var(--accent)' : 'transparent';
+  document.getElementById('mc-tab-excel').style.background = tab === 'excel' ? 'var(--surface)' : 'transparent';
+  document.getElementById('mc-tab-excel').style.color = tab === 'excel' ? 'var(--accent)' : 'var(--muted)';
+  document.getElementById('mc-tab-excel').style.borderBottomColor = tab === 'excel' ? 'var(--accent)' : 'transparent';
+}
+
+// ── EXCEL UPLOAD ──────────────────────────────────────────────────────
+var mc_excel_file = null;
+
+function onExcelFileSelected(input) {
+  var f = input.files[0];
+  if (!f) return;
+  mc_excel_file = f;
+  var fn = document.getElementById('mc-file-name');
+  fn.textContent = f.name + ' — prêt';
+  fn.style.display = 'block';
+  document.getElementById('mc-batch-btn').disabled = false;
+  document.getElementById('mc-dropzone').style.borderColor = 'var(--accent)';
+  document.getElementById('mc-dropzone').style.background = 'var(--lime-bg)';
+  document.getElementById('mc-batch-area').innerHTML = '<div style="text-align:center;color:var(--accent);font-size:12px;padding:24px 0;font-weight:600;">Fichier chargé — cliquez sur Lancer la collecte.</div>';
+}
+
+function togglePkgName() {
+  var checked = document.getElementById('mc-pkg-check').checked;
+  document.getElementById('mc-pkg-name-wrap').style.display = checked ? 'block' : 'none';
+  if (checked) setTimeout(function(){ document.getElementById('mc-pkg-name').focus(); }, 80);
+}
+
+async function runBatchCollect() {
+  if (!mc_excel_file) { showToast('Importez un fichier Excel'); return; }
+  var btn = document.getElementById('mc-batch-btn');
+  var createPkg = document.getElementById('mc-pkg-check').checked;
+  var pkgName = createPkg ? document.getElementById('mc-pkg-name').value.trim() : '';
+  if (createPkg && !pkgName) { document.getElementById('mc-pkg-name').focus(); showToast('Donnez un nom au package'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Collecte en cours…';
+
+  var area = document.getElementById('mc-batch-area');
+  area.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:16px;background:var(--surface2);border-radius:8px;"><div class="spinner"></div><span style="font-size:12px;color:var(--muted);">Envoi du fichier et analyse IA…</span></div>';
+
+  var fd = new FormData();
+  fd.append('file', mc_excel_file);
+  if (createPkg) { fd.append('create_package', 'true'); fd.append('package_name', pkgName); }
+
+  try {
+    var res = await fetch(API + '/api/collect-batch', { method: 'POST', body: fd });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    var results = data.results || [];
+    var saved = results.filter(function(r){ return r.status === 'saved'; }).length;
+    var dupes = results.filter(function(r){ return r.status === 'duplicate'; }).length;
+    var errors = results.filter(function(r){ return r.status === 'error'; }).length;
+
+    var html = '<div style="margin-bottom:12px;padding:10px 14px;background:rgba(30,143,84,0.08);border-radius:8px;border:1px solid rgba(30,143,84,0.2);">';
+    html += '<span style="font-size:12px;font-weight:700;color:#1a7a3e;">✓ ' + saved + ' sauvegardé(s)</span>';
+    if (dupes) html += ' · <span style="font-size:11px;color:var(--muted);">' + dupes + ' doublon(s)</span>';
+    if (errors) html += ' · <span style="font-size:11px;color:#c8392b;">' + errors + ' erreur(s)</span>';
+    html += '</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    results.forEach(function(r) {
+      var icon = r.status === 'saved' ? '✅' : r.status === 'duplicate' ? '⚠️' : '❌';
+      var label = r.titre || r.url;
+      var sub = r.status === 'error' ? (r.error || 'Erreur inconnue') : r.status === 'duplicate' ? 'Déjà dans la base' : 'Ajouté';
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border-radius:6px;font-size:11px;">';
+      html += '<span>' + icon + '</span>';
+      html += '<div style="flex:1;overflow:hidden;"><div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + label + '</div>';
+      html += '<div style="color:var(--muted);">' + sub + '</div></div></div>';
+    });
+    html += '</div>';
+    if (data.package_id) {
+      html += '<div style="margin-top:12px;padding:10px 14px;background:var(--lime-bg);border-radius:8px;border:1px solid rgba(200,232,78,0.35);font-size:11px;color:var(--accent);font-weight:600;">📦 Package &laquo;' + (data.package_name || '') + '&raquo; créé avec ' + saved + ' dispositif(s)</div>';
+      loadPackages();
+    }
+    area.innerHTML = html;
+    loadDispositifs();
+    btn.textContent = 'Terminer';
+    btn.onclick = closeManualCollect;
+    btn.disabled = false;
+  } catch(e) {
+    area.innerHTML = '<div style="padding:14px;background:rgba(200,57,43,0.07);border:1px solid rgba(200,57,43,0.2);border-radius:8px;color:#a0291e;font-size:12px;">Erreur : ' + e.message + '</div>';
+    btn.disabled = false;
+    btn.textContent = 'Réessayer';
+  }
+}
+
+// ── PACKAGES ──────────────────────────────────────────────────────────
+var currentPkgId = null;
+
+async function loadPackages() {
+  var list = document.getElementById('pkg-list');
+  try {
+    var res = await fetch(API + '/api/packages');
+    var pkgs = await res.json();
+    document.getElementById('pkg-list-count').textContent = pkgs.length + ' package' + (pkgs.length > 1 ? 's' : '');
+    if (!pkgs.length) {
+      list.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:48px 24px;color:var(--muted);"><div style="font-size:32px;margin-bottom:10px;">📦</div><div style="font-size:13px;font-weight:700;margin-bottom:6px;">Aucun package</div><div style="font-size:12px;">Importez un fichier Excel et cochez &laquo;Regrouper dans un Package&raquo;</div></div>';
+      return;
+    }
+    list.innerHTML = pkgs.map(function(p) {
+      var d = p.created_at ? new Date(p.created_at).toLocaleDateString('fr-FR') : '';
+      return '<div onclick="openPkgDetail(' + p.id + ','' + p.name.replace(/'/g,'\\'') + '')" style="background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:18px 20px;cursor:pointer;transition:all 0.18s;" onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">' +
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">' +
+        '<div style="width:38px;height:38px;background:var(--lime-bg);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;">📦</div>' +
+        '<button onclick="event.stopPropagation();deletePackage(' + p.id + ',this)" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:4px 6px;border-radius:5px;" onmouseover="this.style.color='#c8392b'" onmouseout="this.style.color='var(--muted)'">✕</button>' +
+        '</div>' +
+        '<div style="font-family:'Syne',sans-serif;font-weight:800;font-size:14px;color:var(--accent);margin-bottom:5px;">' + p.name + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);">' + p.nb + ' dispositif' + (p.nb > 1 ? 's' : '') + ' · ' + d + '</div>' +
+        '</div>';
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:#c8392b;font-size:12px;">Erreur chargement</div>';
+  }
+}
+
+async function openPkgDetail(id, name) {
+  currentPkgId = id;
+  document.getElementById('pkg-list').style.display = 'none';
+  var detail = document.getElementById('pkg-detail');
+  detail.style.display = 'flex';
+  document.getElementById('pkg-detail-name').textContent = name;
+  document.getElementById('pkg-detail-count').textContent = '';
+  document.getElementById('pkg-detail-grid').innerHTML = '<div class="spinner" style="margin:32px auto;display:block;"></div>';
+
+  try {
+    var res = await fetch(API + '/api/packages/' + id + '/dispositifs');
+    var disps = await res.json();
+    document.getElementById('pkg-detail-count').textContent = disps.length + ' dispositif' + (disps.length > 1 ? 's' : '');
+    if (!disps.length) {
+      document.getElementById('pkg-detail-grid').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:32px;">Aucun dispositif dans ce package</div>';
+      return;
+    }
+    document.getElementById('pkg-detail-grid').innerHTML = disps.map(function(d) {
+      return '<div style="background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;">' +
+        '<div style="font-family:'Syne',sans-serif;font-weight:800;font-size:12px;color:var(--accent);margin-bottom:6px;line-height:1.3;">' + (d.titre || 'Sans titre') + '</div>' +
+        '<div style="font-size:10.5px;color:var(--muted);margin-bottom:4px;">' + (d.guichet_financeur || '') + '</div>' +
+        '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;">' +
+        (d.nature ? '<span style="background:var(--lime-bg);color:#3a5a1e;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:100px;">' + d.nature + '</span>' : '') +
+        (d.territoire ? '<span style="background:var(--surface2);color:var(--muted);font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:100px;">' + d.territoire + '</span>' : '') +
+        '</div>' +
+        (d.source_url ? '<a href="' + d.source_url + '" target="_blank" style="display:block;margin-top:8px;font-size:10px;color:var(--accent);opacity:0.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + d.source_url + '</a>' : '') +
+        '</div>';
+    }).join('');
+  } catch(e) {
+    document.getElementById('pkg-detail-grid').innerHTML = '<div style="color:#c8392b;font-size:12px;">Erreur</div>';
+  }
+}
+
+function closePkgDetail() {
+  document.getElementById('pkg-detail').style.display = 'none';
+  document.getElementById('pkg-list').style.display = 'grid';
+  currentPkgId = null;
+}
+
+function exportPackagePptx() {
+  if (!currentPkgId) return;
+  window.open(API + '/api/packages/' + currentPkgId + '/export-pptx', '_blank');
+}
+
+async function deletePackage(id, btn) {
+  if (!confirm('Supprimer ce package ? Les dispositifs restent dans la base.')) return;
+  btn.disabled = true;
+  try {
+    await fetch(API + '/api/packages/' + id, { method: 'DELETE' });
+    loadPackages();
+  } catch(e) { showToast('Erreur'); }
 }
 
 // ── COLLECT ALL MISSING ───────────────────────────────────────────────
@@ -3178,9 +3438,11 @@ function switchTab(tab, btn) {
   document.querySelectorAll('.header-tab').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-' + tab).classList.add('active');
+  var panel = document.getElementById('panel-' + tab);
+  if (panel) panel.classList.add('active');
   if (tab === 'veille360') loadV360Sessions();
   if (tab === 'dispositifs') loadDispositifs();
+  if (tab === 'packages') loadPackages();
 }
 
 // ── ESPACE PROJET ────────────────────────────────────────────────────
@@ -8681,6 +8943,262 @@ def collect_dispositif():
         log.error(f"Collect Claude error: {e}")
         return jsonify({'error': str(e)}),500
 
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PACKAGES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/packages', methods=['GET'])
+def get_packages():
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("""
+        SELECT p.id, p.name, p.created_at,
+               COUNT(d.id) as nb
+        FROM packages p
+        LEFT JOIN dispositifs d ON d.package_id = p.id
+        GROUP BY p.id ORDER BY p.created_at DESC
+    """)
+    rows = cur.fetchall(); cur.close(); conn.close()
+    result = []
+    for r in rows:
+        result.append({'id': r['id'], 'name': r['name'],
+                       'created_at': r['created_at'].isoformat() if r['created_at'] else '',
+                       'nb': r['nb']})
+    return jsonify(result)
+
+@app.route('/api/packages', methods=['POST'])
+def create_package():
+    data = request.get_json()
+    name = data.get('name','').strip()
+    if not name:
+        return jsonify({'error': 'Nom requis'}), 400
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("INSERT INTO packages (name) VALUES (%s) RETURNING id", (name,))
+    pkg_id = cur.fetchone()['id']
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'id': pkg_id, 'name': name})
+
+@app.route('/api/packages/<int:pid>', methods=['DELETE'])
+def delete_package(pid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("DELETE FROM packages WHERE id=%s", (pid,))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'status': 'deleted'})
+
+@app.route('/api/packages/<int:pid>/dispositifs', methods=['GET'])
+def get_package_dispositifs(pid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT * FROM dispositifs WHERE package_id=%s ORDER BY collected_at DESC", (pid,))
+    rows = cur.fetchall(); cur.close(); conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        if d.get('collected_at'): d['collected_at'] = d['collected_at'].isoformat()
+        result.append(d)
+    return jsonify(result)
+
+@app.route('/api/packages/<int:pid>/export-pptx', methods=['GET'])
+def export_package_pptx(pid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT name FROM packages WHERE id=%s", (pid,))
+    pkg = cur.fetchone()
+    if not pkg:
+        return jsonify({'error': 'Package introuvable'}), 404
+    cur.execute("SELECT * FROM dispositifs WHERE package_id=%s ORDER BY collected_at DESC", (pid,))
+    rows = cur.fetchall(); cur.close(); conn.close()
+    if not rows:
+        return jsonify({'error': 'Package vide'}), 400
+
+    from pptx import Presentation
+    from pptx.util import Inches, Pt, Emu
+    from pptx.dml.color import RGBColor
+    import io, base64 as b64mod
+
+    # Combine all dispositifs into one PPTX
+    combined_prs = None
+    for r in rows:
+        data = dict(r)
+        if data.get('collected_at'): data['collected_at'] = data['collected_at'].isoformat()
+        try:
+            pptx_b64 = generate_dispositif_pptx(data)
+            pptx_bytes = b64mod.b64decode(pptx_b64)
+            prs = Presentation(io.BytesIO(pptx_bytes))
+            if combined_prs is None:
+                combined_prs = prs
+            else:
+                for slide in prs.slides:
+                    template = combined_prs.slide_layouts[5]
+                    new_slide = combined_prs.slides.add_slide(template)
+                    for shape in slide.shapes:
+                        try:
+                            el = shape.element
+                            new_slide.shapes._spTree.insert(2, el)
+                        except Exception:
+                            pass
+        except Exception as e:
+            log.warning(f"Package PPTX slide error: {e}")
+            continue
+
+    if not combined_prs:
+        return jsonify({'error': 'Aucune slide generee'}), 500
+
+    buf = io.BytesIO()
+    combined_prs.save(buf)
+    buf.seek(0)
+    from flask import send_file
+    safe_name = pkg['name'].replace(' ', '_').replace('/', '-')[:40]
+    return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                     as_attachment=True, download_name=f"Package_{safe_name}.pptx")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BATCH COLLECT (Excel upload)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/collect-batch', methods=['POST'])
+def collect_batch():
+    """Read URLs from uploaded Excel (col A, sheet 1), collect each one, save to DB."""
+    try:
+        import openpyxl
+    except ImportError:
+        return jsonify({'error': 'openpyxl non installe'}), 500
+
+    file = request.files.get('file')
+    if not file:
+        return jsonify({'error': 'Fichier manquant'}), 400
+
+    package_name = request.form.get('package_name', '').strip()
+    create_pkg = request.form.get('create_package', 'false') == 'true' and bool(package_name)
+
+    # Read URLs from Excel
+    try:
+        import io as _io
+        wb = openpyxl.load_workbook(_io.BytesIO(file.read()), read_only=True, data_only=True)
+        ws = wb.worksheets[0]
+        urls = []
+        for row in ws.iter_rows(min_row=1, max_row=21, min_col=1, max_col=1, values_only=True):
+            val = row[0]
+            if val and isinstance(val, str) and val.strip().startswith('http'):
+                urls.append(val.strip())
+        wb.close()
+    except Exception as e:
+        return jsonify({'error': f'Lecture Excel impossible : {e}'}), 400
+
+    if not urls:
+        return jsonify({'error': 'Aucune URL trouvee en colonne A'}), 400
+
+    urls = urls[:20]  # Hard limit
+
+    # Create package if requested
+    pkg_id = None
+    if create_pkg:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("INSERT INTO packages (name) VALUES (%s) RETURNING id", (package_name,))
+        pkg_id = cur.fetchone()['id']
+        conn.commit(); cur.close(); conn.close()
+
+    # Process each URL
+    results = []
+    fields = ['guichet_financeur','guichet_instructeur','titre','nature','beneficiaire',
+              'type_depot','date_fermeture','objectif','types_depenses','operations_eligibles',
+              'depenses_eligibles','criteres_eligibilite','depenses_ineligibles','montants_taux',
+              'thematiques','territoire','points_vigilance','contact','programme_europeen','source_url']
+
+    for idx, url in enumerate(urls):
+        result = {'url': url, 'index': idx, 'status': 'error', 'titre': '', 'error': ''}
+        try:
+            # Reuse collect logic inline
+            page_text = ''
+            pdf_url = None
+            source_used = 'page'
+
+            try:
+                pdf_url = _scrape_pdf_url(url)
+            except Exception:
+                pass
+
+            if pdf_url and pdf_url.lower().split('?')[0].endswith(('.pdf','.doc','.docx')):
+                try:
+                    req_cdc = Request(pdf_url, headers={'User-Agent':'Mozilla/5.0'})
+                    with urlopen(req_cdc, timeout=12) as resp_cdc:
+                        raw_cdc = resp_cdc.read(150000)
+                    try:
+                        from io import BytesIO
+                        from pdfminer.high_level import extract_text as pdf_extract
+                        page_text = pdf_extract(BytesIO(raw_cdc))[:6000]
+                        source_used = 'cdc_pdf'
+                    except Exception:
+                        page_text = raw_cdc.decode('utf-8', errors='ignore')[:6000]
+                        source_used = 'cdc_raw'
+                except Exception as e:
+                    log.warning(f"Batch CDC error {pdf_url}: {e}")
+
+            if not page_text:
+                try:
+                    req_html = Request(url, headers={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+                    with urlopen(req_html, timeout=10) as resp_html:
+                        raw_html = resp_html.read(200000).decode('utf-8', errors='ignore')
+                    NOISE_PAT = re.compile('<(script|style|nav|header|footer|aside)[^>]*>.*?</(script|style|nav|header|footer|aside)>', re.IGNORECASE|re.DOTALL)
+                    clean = NOISE_PAT.sub(' ', raw_html)
+                    text = re.sub(r'<[^>]+>', ' ', clean)
+                    text = re.sub(r'\s+', ' ', text).strip()
+                    page_text = text[500:8500] if len(text) > 500 else text[:8000]
+                except Exception as e:
+                    page_text = f"URL: {url} (contenu non accessible)"
+
+            cdc_mention = f"\nCahier des charges : {pdf_url}" if pdf_url else ""
+            user_content = f"Analyse ce dispositif et remplis la grille.{cdc_mention}\nURL : {url}\n[Source : {source_used}]\n\nContenu :\n{page_text}"
+            payload = json.dumps({
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 2000,
+                "system": COLLECT_PROMPT,
+                "messages": [{"role":"user","content":user_content}]
+            }).encode()
+            req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={
+                "Content-Type":"application/json",
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version":"2023-06-01"
+            }, method="POST")
+            with urlopen(req, timeout=30) as resp:
+                claude_data = json.loads(resp.read())
+            text_resp = claude_data["content"][0]["text"].strip()
+            m = re.search(r'\{[\s\S]*\}', text_resp)
+            disp = json.loads(m.group() if m else text_resp)
+            disp['source_url'] = url
+            if pdf_url: disp['cdc_url'] = pdf_url
+
+            # Save to DB
+            conn = get_db(); cur = conn.cursor()
+            src_url = disp.get('source_url', '')
+            cur.execute("SELECT id FROM dispositifs WHERE source_url=%s", (src_url,))
+            existing = cur.fetchone()
+            if existing:
+                result['status'] = 'duplicate'
+                result['titre'] = disp.get('titre', url)
+            else:
+                cols = ','.join(fields)
+                placeholders = ','.join(['%s']*len(fields))
+                vals = [disp.get(f,'') for f in fields]
+                if pkg_id:
+                    cur.execute(f"INSERT INTO dispositifs ({cols}, package_id) VALUES ({placeholders}, %s) RETURNING id", vals + [pkg_id])
+                else:
+                    cur.execute(f"INSERT INTO dispositifs ({cols}) VALUES ({placeholders}) RETURNING id", vals)
+                saved_id = cur.fetchone()['id']
+                conn.commit()
+                result['status'] = 'saved'
+                result['titre'] = disp.get('titre', url)
+                result['id'] = saved_id
+            cur.close(); conn.close()
+
+        except Exception as e:
+            result['error'] = str(e)[:120]
+            log.error(f"Batch collect error {url}: {e}")
+
+        results.append(result)
+
+    return jsonify({'results': results, 'package_id': pkg_id, 'package_name': package_name})
 
 @app.route('/api/dispositifs', methods=['GET'])
 def get_dispositifs():
