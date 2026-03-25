@@ -2925,15 +2925,36 @@ function renderDispTable(list) {
 
 // ── COLLECTE MANUELLE ─────────────────────────────────────────────────
 var manualCollectData = null;
+var MC_FIELDS = [
+  ['Titre',              'titre'],
+  ['Guichet financeur',  'guichet_financeur'],
+  ['Guichet instructeur','guichet_instructeur'],
+  ['Nature',             'nature'],
+  ['Beneficiaire',       'beneficiaire'],
+  ['Type de depot',      'type_depot'],
+  ['Date de fermeture',  'date_fermeture'],
+  ['Objectif',           'objectif'],
+  ['Types de depenses',  'types_depenses'],
+  ['Operations eligibles','operations_eligibles'],
+  ['Depenses eligibles', 'depenses_eligibles'],
+  ['Criteres eligibilite','criteres_eligibilite'],
+  ['Depenses ineligibles','depenses_ineligibles'],
+  ['Montants et taux',   'montants_taux'],
+  ['Thematiques',        'thematiques'],
+  ['Territoire',         'territoire'],
+  ['Points de vigilance','points_vigilance'],
+  ['Contact',            'contact'],
+  ['Programme europeen', 'programme_europeen']
+];
 
 function openManualCollect() {
   manualCollectData = null;
   document.getElementById('mc-url-input').value = '';
   document.getElementById('mc-cdc-status').textContent = '';
-  document.getElementById('mc-result-area').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:24px 0;">Entrez une URL et cliquez sur <strong>Analyser</strong> pour extraire la fiche dispositif.</div>';
+  document.getElementById('mc-result-area').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:24px 0;">Entrez une URL puis cliquez sur Analyser.</div>';
   document.getElementById('mc-footer').style.display = 'none';
   document.getElementById('mc-run-btn').disabled = false;
-  document.getElementById('mc-run-btn').textContent = '🔍 Analyser';
+  document.getElementById('mc-run-btn').textContent = 'Analyser';
   document.getElementById('manual-collect-modal').style.display = 'flex';
   setTimeout(function(){ document.getElementById('mc-url-input').focus(); }, 100);
 }
@@ -2944,104 +2965,73 @@ function closeManualCollect() {
 
 async function runManualCollect() {
   var url = document.getElementById('mc-url-input').value.trim();
-  if (!url) {
-    document.getElementById('mc-url-input').style.borderColor = 'var(--red, #c8392b)';
-    return;
-  }
+  if (!url) { document.getElementById('mc-url-input').style.borderColor = '#c8392b'; return; }
   var btn = document.getElementById('mc-run-btn');
   btn.disabled = true;
-  btn.textContent = '⏳ Analyse…';
-  document.getElementById('mc-cdc-status').textContent = 'Scraping de la page en cours…';
+  btn.textContent = 'Analyse en cours…';
+  document.getElementById('mc-cdc-status').textContent = 'Scraping en cours…';
   document.getElementById('mc-footer').style.display = 'none';
-  document.getElementById('mc-result-area').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:32px;color:var(--muted);"><div class="spinner"></div><div style="font-size:12px;">Recherche du cahier des charges et analyse IA…</div><div style="font-size:11px;opacity:0.7;">Peut prendre 15-25 secondes</div></div>';
-
+  document.getElementById('mc-result-area').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:32px;color:var(--muted);"><div class="spinner"></div><div style="font-size:12px;">Analyse IA en cours (15-25 s)…</div></div>';
   try {
     var res = await fetch(API + '/api/collect', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({url: url, title: ''})
     });
     var data = await res.json();
     if (data.error) throw new Error(data.error);
-
     manualCollectData = data;
     manualCollectData.source_url = url;
-
-    // CDC status feedback
-    var cdcMsg = '';
     if (data.cdc_url) {
-      cdcMsg = '✅ Cahier des charges détecté et analysé en priorité : <a href="'+data.cdc_url+'" target="_blank" style="color:var(--accent);text-decoration:underline;">'+data.cdc_url.split('/').pop().substring(0,50)+'</a>';
+      var fname = data.cdc_url.split('/').slice(-1)[0].substring(0, 50);
+      document.getElementById('mc-cdc-status').innerHTML = 'CDC detecte et analyse en priorite : <a href="' + data.cdc_url + '" target="_blank" style="color:var(--accent);">' + fname + '</a>';
     } else {
-      cdcMsg = '⚠️ Pas de CDC détecté — analyse basée sur la page web uniquement';
+      document.getElementById('mc-cdc-status').textContent = 'Pas de CDC detecte — analyse basee sur la page web';
     }
-    document.getElementById('mc-cdc-status').innerHTML = cdcMsg;
-
-    // Render preview
-    var fields = [
-      ['Titre', data.titre],
-      ['Guichet financeur', data.guichet_financeur],
-      ['Guichet instructeur', data.guichet_instructeur],
-      ['Nature', data.nature],
-      ['Bénéficiaire', data.beneficiaire],
-      ['Type de dépôt', data.type_depot],
-      ['Date de fermeture', data.date_fermeture],
-      ['Objectif', data.objectif],
-      ['Types de dépenses', data.types_depenses],
-      ['Opérations éligibles', data.operations_eligibles],
-      ['Dépenses éligibles', data.depenses_eligibles],
-      ['Critères d\'éligibilité', data.criteres_eligibilite],
-      ['Dépenses inéligibles', data.depenses_ineligibles],
-      ['Montants et taux', data.montants_taux],
-      ['Thématiques', data.thematiques],
-      ['Territoire', data.territoire],
-      ['Points de vigilance', data.points_vigilance],
-      ['Contact', data.contact],
-      ['Programme européen', data.programme_europeen],
-    ];
     var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;">';
-    fields.forEach(function(f) {
-      var val = f[1] || '<span style="color:var(--muted2);font-style:italic;">Non renseigné</span>';
-      var isEmpty = !f[1] || f[1] === 'Information non fournie';
-      html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;' + (isEmpty ? 'opacity:0.55;' : '') + '">';
-      html += '<div style="font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">'+f[0]+'</div>';
-      html += '<div style="font-size:12px;color:var(--text);line-height:1.4;">'+val+'</div>';
-      html += '</div>';
+    MC_FIELDS.forEach(function(f) {
+      var val = data[f[1]];
+      var empty = !val || val === 'Information non fournie';
+      var disp = empty ? '<em style="color:var(--muted2);">Non renseigne</em>' : val;
+      html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;' + (empty ? 'opacity:0.55;' : '') + '">';
+      html += '<div style="font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">' + f[0] + '</div>';
+      html += '<div style="font-size:12px;line-height:1.4;">' + disp + '</div></div>';
     });
     html += '</div>';
     document.getElementById('mc-result-area').innerHTML = html;
     document.getElementById('mc-footer').style.display = 'flex';
   } catch(e) {
     document.getElementById('mc-cdc-status').textContent = '';
-    document.getElementById('mc-result-area').innerHTML = '<div style="background:rgba(200,57,43,0.07);border:1px solid rgba(200,57,43,0.2);border-radius:var(--radius);padding:16px;color:#a0291e;font-size:12px;">⚠️ Erreur : ' + e.message + '</div>';
+    document.getElementById('mc-result-area').innerHTML = '<div style="background:rgba(200,57,43,0.07);border:1px solid rgba(200,57,43,0.2);border-radius:6px;padding:14px;color:#a0291e;font-size:12px;">Erreur : ' + e.message + '</div>';
   }
   btn.disabled = false;
-  btn.textContent = '🔍 Analyser';
+  btn.textContent = 'Analyser';
 }
 
 async function saveManualCollect() {
   if (!manualCollectData) return;
   var btn = document.getElementById('mc-save-btn');
   btn.disabled = true;
-  btn.textContent = '⏳ Sauvegarde…';
+  btn.textContent = 'Sauvegarde…';
   try {
     var res = await fetch(API + '/api/dispositifs', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(manualCollectData)
     });
     var saved = await res.json();
     if (saved.status === 'duplicate') {
-      showToast('Ce dispositif est déjà dans la base !');
+      showToast('Dispositif deja dans la base !');
     } else {
-      showToast('Dispositif ajouté à la base ✓');
+      showToast('Dispositif ajoute a la base !');
       closeManualCollect();
       loadDispositifs();
     }
   } catch(e) {
-    showToast('Erreur lors de la sauvegarde : ' + e.message);
+    showToast('Erreur sauvegarde : ' + e.message);
   }
   btn.disabled = false;
-  btn.textContent = '💾 Sauvegarder dans la base';
+  btn.textContent = 'Sauvegarder';
 }
 
 // ── COLLECT ALL MISSING ───────────────────────────────────────────────
