@@ -3222,20 +3222,43 @@ async function loadPackages() {
     var pkgs = await res.json();
     document.getElementById('pkg-list-count').textContent = pkgs.length + ' package' + (pkgs.length > 1 ? 's' : '');
     if (!pkgs.length) {
-      list.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:48px 24px;color:var(--muted);"><div style="font-size:32px;margin-bottom:10px;">📦</div><div style="font-size:13px;font-weight:700;margin-bottom:6px;">Aucun package</div><div style="font-size:12px;">Importez un fichier Excel et cochez &laquo;Regrouper dans un Package&raquo;</div></div>';
+      list.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:48px 24px;color:var(--muted);">' +
+        '<div style="font-size:32px;margin-bottom:10px;">&#x1F4E6;</div>' +
+        '<div style="font-size:13px;font-weight:700;margin-bottom:6px;">Aucun package</div>' +
+        '<div style="font-size:12px;">Importez un fichier Excel et cochez Regrouper dans un Package</div></div>';
       return;
     }
-    list.innerHTML = pkgs.map(function(p) {
+    var html = '';
+    pkgs.forEach(function(p) {
       var d = p.created_at ? new Date(p.created_at).toLocaleDateString('fr-FR') : '';
-      return '<div onclick="openPkgDetail(' + p.id + ','' + p.name.replace(/'/g,'\\'') + '')" style="background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:18px 20px;cursor:pointer;transition:all 0.18s;" onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform=''">' +
-        '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">' +
-        '<div style="width:38px;height:38px;background:var(--lime-bg);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;">📦</div>' +
-        '<button onclick="event.stopPropagation();deletePackage(' + p.id + ',this)" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:4px 6px;border-radius:5px;" onmouseover="this.style.color='#c8392b'" onmouseout="this.style.color='var(--muted)'">✕</button>' +
-        '</div>' +
-        '<div style="font-family:'Syne',sans-serif;font-weight:800;font-size:14px;color:var(--accent);margin-bottom:5px;">' + p.name + '</div>' +
-        '<div style="font-size:11px;color:var(--muted);">' + p.nb + ' dispositif' + (p.nb > 1 ? 's' : '') + ' · ' + d + '</div>' +
-        '</div>';
-    }).join('');
+      var safeName = p.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      html += '<div data-pkgid="' + p.id + '" data-pkgname="' + p.name.replace(/"/g,'&quot;') + '" class="pkg-card">';
+      html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">';
+      html += '<div style="width:38px;height:38px;background:var(--lime-bg);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;">&#x1F4E6;</div>';
+      html += '<button class="pkg-del-btn" data-pid="' + p.id + '" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:4px 6px;border-radius:5px;">&#x2715;</button>';
+      html += '</div>';
+      html += '<div style="font-weight:800;font-size:14px;color:var(--accent);margin-bottom:5px;">' + p.name + '</div>';
+      html += '<div style="font-size:11px;color:var(--muted);">' + p.nb + ' dispositif' + (p.nb > 1 ? 's' : '') + ' &middot; ' + d + '</div>';
+      html += '</div>';
+    });
+    list.innerHTML = html;
+    list.querySelectorAll('.pkg-card').forEach(function(card) {
+      card.style.cssText = 'background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:18px 20px;cursor:pointer;transition:all 0.18s;';
+      card.addEventListener('mouseenter', function(){ this.style.borderColor='var(--accent)'; this.style.transform='translateY(-2px)'; });
+      card.addEventListener('mouseleave', function(){ this.style.borderColor='var(--border)'; this.style.transform=''; });
+      card.addEventListener('click', function(e) {
+        if (e.target.classList.contains('pkg-del-btn')) return;
+        openPkgDetail(parseInt(this.dataset.pkgid), this.dataset.pkgname);
+      });
+    });
+    list.querySelectorAll('.pkg-del-btn').forEach(function(btn) {
+      btn.addEventListener('mouseenter', function(){ this.style.color='#c8392b'; });
+      btn.addEventListener('mouseleave', function(){ this.style.color='var(--muted)'; });
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        deletePackage(parseInt(this.dataset.pid), this);
+      });
+    });
   } catch(e) {
     list.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:#c8392b;font-size:12px;">Erreur chargement</div>';
   }
@@ -3249,7 +3272,6 @@ async function openPkgDetail(id, name) {
   document.getElementById('pkg-detail-name').textContent = name;
   document.getElementById('pkg-detail-count').textContent = '';
   document.getElementById('pkg-detail-grid').innerHTML = '<div class="spinner" style="margin:32px auto;display:block;"></div>';
-
   try {
     var res = await fetch(API + '/api/packages/' + id + '/dispositifs');
     var disps = await res.json();
@@ -3258,17 +3280,19 @@ async function openPkgDetail(id, name) {
       document.getElementById('pkg-detail-grid').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:32px;">Aucun dispositif dans ce package</div>';
       return;
     }
-    document.getElementById('pkg-detail-grid').innerHTML = disps.map(function(d) {
-      return '<div style="background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;">' +
-        '<div style="font-family:'Syne',sans-serif;font-weight:800;font-size:12px;color:var(--accent);margin-bottom:6px;line-height:1.3;">' + (d.titre || 'Sans titre') + '</div>' +
-        '<div style="font-size:10.5px;color:var(--muted);margin-bottom:4px;">' + (d.guichet_financeur || '') + '</div>' +
-        '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;">' +
-        (d.nature ? '<span style="background:var(--lime-bg);color:#3a5a1e;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:100px;">' + d.nature + '</span>' : '') +
-        (d.territoire ? '<span style="background:var(--surface2);color:var(--muted);font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:100px;">' + d.territoire + '</span>' : '') +
-        '</div>' +
-        (d.source_url ? '<a href="' + d.source_url + '" target="_blank" style="display:block;margin-top:8px;font-size:10px;color:var(--accent);opacity:0.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + d.source_url + '</a>' : '') +
-        '</div>';
-    }).join('');
+    var html = '';
+    disps.forEach(function(d) {
+      html += '<div style="background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;">';
+      html += '<div style="font-weight:800;font-size:12px;color:var(--accent);margin-bottom:6px;line-height:1.3;">' + (d.titre || 'Sans titre') + '</div>';
+      html += '<div style="font-size:10.5px;color:var(--muted);margin-bottom:4px;">' + (d.guichet_financeur || '') + '</div>';
+      html += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;">';
+      if (d.nature) html += '<span style="background:var(--lime-bg);color:#3a5a1e;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:100px;">' + d.nature + '</span>';
+      if (d.territoire) html += '<span style="background:var(--surface2);color:var(--muted);font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:100px;">' + d.territoire + '</span>';
+      html += '</div>';
+      if (d.source_url) html += '<a href="' + d.source_url + '" target="_blank" style="display:block;margin-top:8px;font-size:10px;color:var(--accent);opacity:0.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + d.source_url + '</a>';
+      html += '</div>';
+    });
+    document.getElementById('pkg-detail-grid').innerHTML = html;
   } catch(e) {
     document.getElementById('pkg-detail-grid').innerHTML = '<div style="color:#c8392b;font-size:12px;">Erreur</div>';
   }
