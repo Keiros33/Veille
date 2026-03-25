@@ -273,8 +273,11 @@ def init_db():
         created_at TIMESTAMP DEFAULT NOW()
     )""")
     cur.execute("CREATE TABLE IF NOT EXISTS journal_editions (id SERIAL PRIMARY KEY, title TEXT NOT NULL, edition_date DATE DEFAULT CURRENT_DATE, summaries JSONB NOT NULL DEFAULT '[]', created_at TIMESTAMP DEFAULT NOW())")
-    cur.execute("CREATE TABLE IF NOT EXISTS projet_dispositifs (id SERIAL PRIMARY KEY, session_id INTEGER NOT NULL REFERENCES veille360_sessions(id) ON DELETE CASCADE, titre TEXT, guichet_financeur TEXT, nature TEXT, beneficiaire TEXT, territoire TEXT, type_depot TEXT, date_fermeture TEXT, montants_taux TEXT, objectif TEXT, operations_eligibles TEXT, depenses_eligibles TEXT, criteres_eligibilite TEXT, points_vigilance TEXT, contact TEXT, source_url TEXT, statut TEXT DEFAULT 'identifie', notes TEXT DEFAULT '', created_at TIMESTAMP DEFAULT NOW())")
-    cur.execute("ALTER TABLE veille360_sessions ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''")
+    cur.execute("CREATE TABLE IF NOT EXISTS projet_dispositifs (id SERIAL PRIMARY KEY, session_id INTEGER NOT NULL, titre TEXT, guichet_financeur TEXT, nature TEXT, beneficiaire TEXT, territoire TEXT, type_depot TEXT, date_fermeture TEXT, montants_taux TEXT, objectif TEXT, operations_eligibles TEXT, depenses_eligibles TEXT, criteres_eligibilite TEXT, points_vigilance TEXT, contact TEXT, source_url TEXT, statut TEXT DEFAULT 'identifie', notes TEXT DEFAULT '', created_at TIMESTAMP DEFAULT NOW())")
+    try:
+        cur.execute("ALTER TABLE veille360_sessions ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''")
+    except Exception:
+        pass
     conn.commit(); cur.close(); conn.close()
     log.info("DB ready")
 
