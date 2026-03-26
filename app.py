@@ -2511,13 +2511,13 @@ function buildSidebar() {
   const container = document.getElementById('filter-groups');
   container.innerHTML = TAG_GROUPS.map(g => `
     <div class="filter-group" id="fg-${g.key}">
-      <div class="filter-group-header" onclick="toggleGroup(&quot;${g.key}&quot;)">
+      <div class="filter-group-header" onclick="toggleGroup(\"${g.key}\")">
         <span class="filter-group-label">${g.label}</span>
         <span class="filter-group-count" id="fc-${g.key}">0</span>
         <span class="filter-group-arrow">›</span>
       </div>
       <div class="filter-tags" id="ft-${g.key}">
-        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag(&quot;${g.key}&quot;,&quot;${t.replace(/&quot;/g,"\\'")}',this)">${t}</span>`).join('')}
+        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag(\"${g.key}\",\"${t.replace(/\"/g,"\\'")}',this)">${t}</span>`).join('')}
       </div>
     </div>
   `).join('');
@@ -2729,7 +2729,7 @@ function renderCards(list, showCollect) {
       }
     } else {
       // Bouton Lire + Ajouter au Journal
-      var safeArticleUrl = (a.url||'').replace(/"/g,'&quot;');
+      var safeArticleUrl = (a.url||'').replace(/"/g,'\"');
       actionsHTML += '<a class="abtn abtn-resume" href="'+safeArticleUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 Lire</a>';
       actionsHTML += '<button class="abtn abtn-journal" onclick="addToJournalSelection(this);event.stopPropagation();" data-id="'+(a.id||0)+'" title="Ajouter au prochain journal">📰</button>';
     }
@@ -3043,10 +3043,10 @@ async function loadV360Sessions() {
     }
     list.innerHTML = sessions.map(function(s) {
       var date = s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : '';
-      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="loadV360Session(&quot; + s.id + &quot;)">' +
+      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="loadV360Session(\" + s.id + \")">' +
         '<div style="flex:1;"><div style="font-weight:700;font-size:13px;">' + (s.client_name||'Sans nom') + '</div>' +
         '<div style="font-size:11px;color:var(--muted);">' + date + '</div></div>' +
-        '<button onclick="deleteV360Session(event,&quot; + s.id + &quot;)" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:4px;">✕</button>' +
+        '<button onclick="deleteV360Session(event,\" + s.id + \")" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:4px;">✕</button>' +
         '</div>';
     }).join('');
   } catch(e) {}
@@ -3396,13 +3396,13 @@ function buildSidebar() {
   const container = document.getElementById('filter-groups');
   container.innerHTML = TAG_GROUPS.map(g => `
     <div class="filter-group" id="fg-${g.key}">
-      <div class="filter-group-header" onclick="toggleGroup(&quot;${g.key}&quot;)">
+      <div class="filter-group-header" onclick="toggleGroup(\"${g.key}\")">
         <span class="filter-group-label">${g.label}</span>
         <span class="filter-group-count" id="fc-${g.key}">0</span>
         <span class="filter-group-arrow">›</span>
       </div>
       <div class="filter-tags" id="ft-${g.key}">
-        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag(&quot;${g.key}&quot;,&quot;${t.replace(/&quot;/g,"\\'")}',this)">${t}</span>`).join('')}
+        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag(\"${g.key}\",\"${t.replace(/\"/g,"\\'")}',this)">${t}</span>`).join('')}
       </div>
     </div>
   `).join('');
@@ -3614,7 +3614,7 @@ function renderCards(list, showCollect) {
       }
     } else {
       // Bouton Lire + Ajouter au Journal
-      var safeArticleUrl = (a.url||'').replace(/"/g,'&quot;');
+      var safeArticleUrl = (a.url||'').replace(/"/g,'\"');
       actionsHTML += '<a class="abtn abtn-resume" href="'+safeArticleUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 Lire</a>';
       actionsHTML += '<button class="abtn abtn-journal" onclick="addToJournalSelection(this);event.stopPropagation();" data-id="'+(a.id||0)+'" title="Ajouter au prochain journal">📰</button>';
     }
