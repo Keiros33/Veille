@@ -9079,43 +9079,36 @@ def export_package_pptx(pid):
     import io, base64 as b64mod
 
     import copy
-    from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 
     def _merge_slide_into_prs(src_slide, dst_prs):
-        """Copy a slide from src into dst_prs, including all image media."""
-        # Add blank slide
-        try:
-            layout = dst_prs.slide_layouts[5]
-        except Exception:
-            layout = dst_prs.slide_layouts[0]
+        """Copy a slide including its images into dst_prs."""
+        layout = dst_prs.slide_layouts[5]
         new_slide = dst_prs.slides.add_slide(layout)
 
-        # --- Copy image relationships (media files) ---
-        # Build a mapping: old rId -> new rId in dst slide
+        # Copy image parts using get_or_add_image_part (returns (ImagePart, rId))
         rId_map = {}
         for rel in src_slide.part.rels.values():
             if 'image' in rel.reltype:
                 try:
-                    img_part = rel.target_part
-                    # Add the image to the new slide's part
-                    new_rId = new_slide.part.relate_to(img_part, rel.reltype)
+                    src_img = rel.target_part
+                    _img_part, new_rId = new_slide.part.get_or_add_image_part(
+                        io.BytesIO(src_img.blob)
+                    )
                     rId_map[rel.rId] = new_rId
                 except Exception as e:
-                    log.warning(f"Image rel copy error: {e}")
+                    log.warning(f"Image copy error rId={rel.rId}: {e}")
 
-        # --- Deep copy the spTree ---
+        # Copy spTree with rId remapping for images
         src_sp_tree = src_slide.shapes._spTree
         dst_sp_tree = new_slide.shapes._spTree
 
-        # Clear destination (keep first 2 mandatory group nodes)
+        # Clear destination placeholders (keep first 2 mandatory group nodes)
         while len(dst_sp_tree) > 2:
             dst_sp_tree.remove(dst_sp_tree[-1])
 
-        # Copy each child element, remapping rIds for images
-        from lxml import etree
+        # Deep-copy each child, remapping r:embed / r:link attributes
         for child in list(src_sp_tree)[2:]:
             el = copy.deepcopy(child)
-            # Remap any blipFill rEmbed / rLink attributes
             for node in el.iter():
                 for attr in list(node.attrib.keys()):
                     if attr.endswith('}embed') or attr.endswith('}link'):
