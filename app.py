@@ -9084,19 +9084,21 @@ def export_package_pptx(pid):
         data = dict(r)
         if data.get('collected_at'): data['collected_at'] = data['collected_at'].isoformat()
         try:
-            pptx_b64 = generate_dispositif_pptx(data)
-            pptx_bytes = b64mod.b64decode(pptx_b64)
+            pptx_bytes = generate_dispositif_pptx(data)  # returns raw bytes
             prs = Presentation(io.BytesIO(pptx_bytes))
             if combined_prs is None:
                 combined_prs = prs
             else:
                 for slide in prs.slides:
-                    template = combined_prs.slide_layouts[5]
-                    new_slide = combined_prs.slides.add_slide(template)
+                    from pptx.oxml.ns import qn
+                    import copy
+                    slide_layout = combined_prs.slide_layouts[5]
+                    new_slide = combined_prs.slides.add_slide(slide_layout)
+                    # Copy all shapes from source slide
+                    sp_tree = new_slide.shapes._spTree
                     for shape in slide.shapes:
                         try:
-                            el = shape.element
-                            new_slide.shapes._spTree.insert(2, el)
+                            sp_tree.insert(2, copy.deepcopy(shape.element))
                         except Exception:
                             pass
         except Exception as e:
