@@ -275,6 +275,16 @@ def init_db():
         created_at TIMESTAMP DEFAULT NOW()
     )""")
     cur.execute("CREATE TABLE IF NOT EXISTS journal_editions (id SERIAL PRIMARY KEY, title TEXT NOT NULL, edition_date DATE DEFAULT CURRENT_DATE, summaries JSONB NOT NULL DEFAULT '[]', created_at TIMESTAMP DEFAULT NOW())")
+    cur.execute("""CREATE TABLE IF NOT EXISTS packages (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
+    try:
+        cur.execute("ALTER TABLE dispositifs ADD COLUMN IF NOT EXISTS package_id INTEGER REFERENCES packages(id) ON DELETE SET NULL")
+        conn.commit()
+    except Exception:
+        conn.rollback()
 
     conn.commit(); cur.close(); conn.close()
     log.info("DB ready")
@@ -1706,11 +1716,12 @@ body {
   <div class="header-tag">Espace Collecte</div>
   <nav class="header-tabs">
     <a class="header-tab header-tab-back" href="/app" title="Retour à la curation">← Curation</a>
-    <button class="header-tab active" onclick="switchTab(&quot;veille&quot;, this)">📰 Veille</button>
-    <button class="header-tab" onclick="switchTab(&quot;dispositifs&quot;, this)">🗄 Dispositifs</button>
-    <button class="header-tab" onclick="switchTab(&quot;cdc&quot;, this)">📋 Cahiers des charges</button>
-    <button class="header-tab" onclick="switchTab(&quot;journal&quot;, this)">📰 Journal</button>
-    <button class="header-tab" onclick="switchTab(&quot;veille360&quot;, this)">🔍 Pré-veille 360°</button>
+    <button class="header-tab active" onclick="switchTab('veille', this)">📰 Veille</button>
+    <button class="header-tab" onclick="switchTab('dispositifs', this)">🗄 Dispositifs</button>
+    <button class="header-tab" onclick="switchTab('cdc', this)">📋 Cahiers des charges</button>
+    <button class="header-tab" onclick="switchTab('journal', this)">📰 Journal</button>
+    <button class="header-tab" onclick="switchTab('veille360', this)">🔍 Pré-veille 360°</button>
+    <button class="header-tab" onclick="switchTab('packages', this)">📦 Packages</button>
   </nav>
   <div class="header-search">
     <span class="header-search-icon">🔍</span>
@@ -1749,10 +1760,10 @@ body {
       <div class="vf-row">
         <button onclick="refreshVeille()" class="disp-refresh-btn" title="Rafraîchir la veille">↺</button>
         <div class="vf-btns">
-          <button class="vf-btn active" id="vft-all"  onclick="setViewFilter(&quot;all&quot;,  this)">Tout</button>
-          <button class="vf-btn"        id="vft-actu" onclick="setViewFilter(&quot;actu&quot;, this)">📰 Actualités</button>
-          <button class="vf-btn"        id="vft-disp" onclick="setViewFilter(&quot;disp&quot;, this)">⭐ Dispositifs</button>
-          <button class="vf-btn"        id="vft-cdc"  onclick="setViewFilter(&quot;cdc&quot;,  this)">📋 Avec CDC</button>
+          <button class="vf-btn active" id="vft-all"  onclick="setViewFilter('all',  this)">Tout</button>
+          <button class="vf-btn"        id="vft-actu" onclick="setViewFilter('actu', this)">📰 Actualités</button>
+          <button class="vf-btn"        id="vft-disp" onclick="setViewFilter('disp', this)">⭐ Dispositifs</button>
+          <button class="vf-btn"        id="vft-cdc"  onclick="setViewFilter('cdc',  this)">📋 Avec CDC</button>
         </div>
         <div class="vf-right">
           <span class="result-count" id="result-count">— articles</span>
@@ -1769,15 +1780,15 @@ body {
             </button>
             <div id="collect-submenu" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:999;min-width:260px;overflow:hidden;">
               <div style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);border-bottom:1px solid var(--border);">Choisir ce qu'on collecte</div>
-              <button onclick="collectAllMissing(&quot;all&quot;)" class="collect-submenu-item">
+              <button onclick="collectAllMissing('all')" class="collect-submenu-item">
                 <span style="font-size:15px;">📥</span>
                 <div><div style="font-weight:700;font-size:12px;">Tous les dispositifs</div><div style="font-size:11px;color:var(--muted);">Avec et sans CDC</div></div>
               </button>
-              <button onclick="collectAllMissing(&quot;cdc&quot;)" class="collect-submenu-item" style="border-top:1px solid var(--border);">
+              <button onclick="collectAllMissing('cdc')" class="collect-submenu-item" style="border-top:1px solid var(--border);">
                 <span style="font-size:15px;">📋</span>
                 <div><div style="font-weight:700;font-size:12px;color:#3a6000;">Dispositifs avec CDC</div><div style="font-size:11px;color:var(--muted);">Qualité supérieure — recommandé</div></div>
               </button>
-              <button onclick="collectAllMissing(&quot;nocdc&quot;)" class="collect-submenu-item" style="border-top:1px solid var(--border);">
+              <button onclick="collectAllMissing('nocdc')" class="collect-submenu-item" style="border-top:1px solid var(--border);">
                 <span style="font-size:15px;">🌐</span>
                 <div><div style="font-weight:700;font-size:12px;">Dispositifs sans CDC</div><div style="font-size:11px;color:var(--muted);">Via la page web uniquement</div></div>
               </button>
@@ -1796,8 +1807,8 @@ body {
       <div class="disp-controls">
         <button onclick="refreshDispositifs()" class="disp-refresh-btn" title="Rafraîchir les dispositifs">↺</button>
         <div class="disp-view-toggle">
-          <button class="dv-btn active" id="dv-cards" onclick="setDispView(&quot;cards&quot;, this)">🗂 Bibliothèque</button>
-          <button class="dv-btn"        id="dv-table" onclick="setDispView(&quot;table&quot;, this)">📊 Base de données</button>
+          <button class="dv-btn active" id="dv-cards" onclick="setDispView('cards', this)">🗂 Bibliothèque</button>
+          <button class="dv-btn"        id="dv-table" onclick="setDispView('table', this)">📊 Base de données</button>
         </div>
         <input id="disp-search" placeholder="Rechercher…" oninput="filterDispositifs()" class="disp-search-input">
         <select id="disp-filter-benef" onchange="filterDispositifs()" class="disp-filter-sel">
@@ -1830,6 +1841,7 @@ body {
           <option>Clôturé</option><option>En attente de renouvellement</option>
         </select>
         <span class="result-count" id="disp-count" style="margin-left:auto;">— dispositifs</span>
+        <button onclick="openManualCollect()" class="disp-refresh-btn" style="margin-left:8px;background:var(--accent);color:var(--lime);border-color:var(--accent);padding:6px 14px;font-weight:700;font-size:11px;" title="Collecter depuis un lien">➕ Collecte manuelle</button>
       </div>
       <!-- Vue cartes (bibliothèque) -->
       <div class="disp-grid" id="disp-grid">
@@ -1840,19 +1852,19 @@ body {
         <table class="disp-table" id="disp-table">
           <thead>
             <tr>
-              <th onclick="sortDispTable(&quot;titre&quot;)" class="dt-sort">Titre ↕</th>
-              <th onclick="sortDispTable(&quot;guichet_financeur&quot;)" class="dt-sort">Financeur ↕</th>
-              <th onclick="sortDispTable(&quot;nature&quot;)" class="dt-sort">Nature ↕</th>
-              <th onclick="sortDispTable(&quot;beneficiaire&quot;)" class="dt-sort">Bénéficiaire ↕</th>
-              <th onclick="sortDispTable(&quot;territoire&quot;)" class="dt-sort">Territoire ↕</th>
-              <th onclick="sortDispTable(&quot;type_depot&quot;)" class="dt-sort">Dépôt ↕</th>
-              <th onclick="sortDispTable(&quot;date_fermeture&quot;)" class="dt-sort">Clôture ↕</th>
+              <th onclick="sortDispTable('titre')" class="dt-sort">Titre ↕</th>
+              <th onclick="sortDispTable('guichet_financeur')" class="dt-sort">Financeur ↕</th>
+              <th onclick="sortDispTable('nature')" class="dt-sort">Nature ↕</th>
+              <th onclick="sortDispTable('beneficiaire')" class="dt-sort">Bénéficiaire ↕</th>
+              <th onclick="sortDispTable('territoire')" class="dt-sort">Territoire ↕</th>
+              <th onclick="sortDispTable('type_depot')" class="dt-sort">Dépôt ↕</th>
+              <th onclick="sortDispTable('date_fermeture')" class="dt-sort">Clôture ↕</th>
               <th>Montants</th>
               <th>Objectif</th>
               <th>Dépenses éligibles</th>
               <th>Critères</th>
               <th>Points vigilance</th>
-              <th onclick="sortDispTable(&quot;guichet_instructeur&quot;)" class="dt-sort">Instructeur ↕</th>
+              <th onclick="sortDispTable('guichet_instructeur')" class="dt-sort">Instructeur ↕</th>
               <th>Programme EU</th>
               <th>Contact</th>
               <th style="width:80px;text-align:center;">Export</th>
@@ -2030,9 +2042,9 @@ body {
 
         <!-- Onglets du projet -->
         <div class="ep-tabs">
-          <button class="ep-tab active" id="ept-analyse" onclick="switchEpTab(&quot;analyse&quot;,this)">🔍 Analyse 360°</button>
-          <button class="ep-tab" id="ept-shortlist" onclick="switchEpTab(&quot;shortlist&quot;,this)">⭐ Shortlist</button>
-          <button class="ep-tab" id="ept-notes" onclick="switchEpTab(&quot;notes&quot;,this)">📝 Notes</button>
+          <button class="ep-tab active" id="ept-analyse" onclick="switchEpTab('analyse',this)">🔍 Analyse 360°</button>
+          <button class="ep-tab" id="ept-shortlist" onclick="switchEpTab('shortlist',this)">⭐ Shortlist</button>
+          <button class="ep-tab" id="ept-notes" onclick="switchEpTab('notes',this)">📝 Notes</button>
         </div>
 
         <!-- Volet Analyse 360° -->
@@ -2095,12 +2107,32 @@ body {
           <textarea id="ep-email-content" style="width:100%;min-height:220px;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:12px;line-height:1.7;background:var(--surface2);color:var(--text);resize:vertical;font-family:monospace;box-sizing:border-box;"></textarea>
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
             <button onclick="copyEmail()" style="padding:8px 18px;border:1.5px solid var(--accent);border-radius:8px;background:none;color:var(--accent);cursor:pointer;font-size:12px;font-weight:700;">📋 Copier</button>
-            <button onclick="document.getElementById(&quot;ep-email-modal&quot;).style.display=&quot;none&quot;" style="padding:8px 18px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;font-size:12px;">Fermer</button>
+            <button onclick="document.getElementById('ep-email-modal').style.display='none'" style="padding:8px 18px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;font-size:12px;">Fermer</button>
           </div>
         </div>
       </div>
 
     </div>
+
+    <!-- PANEL PACKAGES -->
+    <div class="panel" id="panel-packages">
+      <div class="disp-controls" style="justify-content:space-between;">
+        <span id="pkg-list-count" style="font-size:11px;color:var(--muted);">— packages</span>
+        <button onclick="openManualCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:6px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">➕ Nouvelle collecte</button>
+      </div>
+      <div id="pkg-list" style="padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"><div style="color:var(--muted);font-size:12px;text-align:center;padding:40px;grid-column:1/-1;">Chargement…</div></div>
+      <div id="pkg-detail" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+        <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0;">
+          <button onclick="closePkgDetail()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;">← Retour</button>
+          <span id="pkg-detail-name" style="font-family:'Syne',sans-serif;font-weight:800;font-size:15px;color:var(--accent);flex:1;"></span>
+          <span id="pkg-detail-count" style="font-size:11px;color:var(--muted);"></span>
+          <button onclick="exportPackagePptx()" style="background:var(--accent);color:var(--lime);border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">📊 Exporter PPTX</button>
+        </div>
+        <div id="pkg-detail-grid" style="flex:1;overflow-y:auto;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;"></div>
+      </div>
+    </div>
+
+
 
   </main>
 </div>
@@ -2110,7 +2142,7 @@ body {
   <div style="background:var(--surface);border-radius:12px;width:92%;max-width:920px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);">
     <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:12px 12px 0 0;">
       <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--accent);" id="v360-modal-title">Analyse 360°</div>
-      <button onclick="document.getElementById(&quot;v360-modal&quot;).style.display=&quot;none&quot;"
+      <button onclick="document.getElementById('v360-modal').style.display='none'"
         style="background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--muted);">✕</button>
     </div>
     <div style="flex:1;overflow-y:auto;padding:16px 20px;font-size:12px;line-height:1.6;color:var(--text);" id="v360-modal-body"></div>
@@ -2129,6 +2161,82 @@ body {
   </div>
 </div>
 
+<!-- MODAL COLLECTE MANUELLE -->
+<div id="manual-collect-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:16px;width:720px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(26,60,46,0.22);overflow:hidden;">
+
+    <!-- Header -->
+    <div style="background:var(--accent);padding:18px 24px;display:flex;align-items:center;gap:14px;flex-shrink:0;">
+      <div style="width:36px;height:36px;background:var(--lime);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">➕</div>
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:#fff;letter-spacing:-0.3px;">Collecte manuelle</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:1px;">Ajoutez un dispositif depuis un lien ou un fichier Excel</div>
+      </div>
+      <button onclick="closeManualCollect()" style="margin-left:auto;background:rgba(255,255,255,0.1);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;color:rgba(255,255,255,0.7);font-size:16px;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface2);">
+      <button id="mc-tab-url" onclick="switchMcTab('url')" style="flex:1;padding:11px 0;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--surface);color:var(--accent);border-bottom:2px solid var(--accent);">🔗 Lien unique</button>
+      <button id="mc-tab-excel" onclick="switchMcTab('excel')" style="flex:1;padding:11px 0;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;background:transparent;color:var(--muted);border-bottom:2px solid transparent;">📊 Fichier Excel</button>
+    </div>
+
+    <!-- TAB : Lien unique -->
+    <div id="mc-pane-url" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+      <div style="padding:16px 24px 12px;border-bottom:1px solid var(--border);flex-shrink:0;">
+        <div style="display:flex;gap:10px;">
+          <input id="mc-url-input" type="url" placeholder="https://…" style="flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;" onkeydown="if(event.key==='Enter') runManualCollect()">
+          <button id="mc-run-btn" onclick="runManualCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:8px;padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">Analyser</button>
+        </div>
+        <div id="mc-cdc-status" style="margin-top:8px;font-size:11px;color:var(--muted);min-height:16px;"></div>
+      </div>
+      <div id="mc-result-area" style="padding:16px 24px;flex:1;overflow-y:auto;min-height:120px;">
+        <div style="text-align:center;color:var(--muted);font-size:12px;padding:32px 0;">Entrez une URL puis cliquez sur Analyser.</div>
+      </div>
+      <div id="mc-footer" style="display:none;padding:13px 24px;border-top:1px solid var(--border);display:none;gap:9px;justify-content:flex-end;flex-shrink:0;">
+        <button onclick="closeManualCollect()" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Annuler</button>
+        <button id="mc-save-btn" onclick="saveManualCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:7px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">💾 Sauvegarder</button>
+      </div>
+    </div>
+
+    <!-- TAB : Fichier Excel -->
+    <div id="mc-pane-excel" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+      <div style="padding:18px 24px;flex-shrink:0;border-bottom:1px solid var(--border);">
+        <!-- Drop zone -->
+        <div id="mc-dropzone" onclick="document.getElementById('mc-file-input').click()" style="border:2px dashed var(--border);border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:all 0.18s;">
+          <div style="font-size:28px;margin-bottom:8px;">📊</div>
+          <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:4px;">Cliquez ou glissez un fichier .xlsx</div>
+          <div style="font-size:11px;color:var(--muted);">URLs en colonne A · Feuille 1 · Max 20 liens</div>
+          <input id="mc-file-input" type="file" accept=".xlsx,.xls" style="display:none;" onchange="onExcelFileSelected(this)">
+        </div>
+        <div id="mc-file-name" style="margin-top:10px;font-size:11px;color:var(--accent);font-weight:600;text-align:center;display:none;"></div>
+
+        <!-- Package option -->
+        <div style="margin-top:16px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:13px 16px;">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;">
+            <input type="checkbox" id="mc-pkg-check" onchange="togglePkgName()" style="width:16px;height:16px;accent-color:var(--accent);">
+            <span style="font-size:12px;font-weight:600;color:var(--text);">Regrouper dans un Package</span>
+            <span style="font-size:11px;color:var(--muted);">— retrouvez tous ces dispositifs ensemble</span>
+          </label>
+          <div id="mc-pkg-name-wrap" style="display:none;margin-top:10px;">
+            <input id="mc-pkg-name" type="text" placeholder="Nom du package (ex: ESS Bretagne 2025)" style="width:100%;background:var(--surface);border:1.5px solid var(--border);border-radius:7px;padding:9px 13px;font-size:12px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress / results -->
+      <div id="mc-batch-area" style="padding:16px 24px;flex:1;overflow-y:auto;min-height:100px;">
+        <div style="text-align:center;color:var(--muted);font-size:12px;padding:28px 0;">Importez un fichier Excel pour démarrer la collecte.</div>
+      </div>
+
+      <div style="padding:13px 24px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;flex-shrink:0;">
+        <button onclick="closeManualCollect()" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Annuler</button>
+        <button id="mc-batch-btn" onclick="runBatchCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:7px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;" disabled>🚀 Lancer la collecte</button>
+      </div>
+    </div>
+
+  </div>
+</div>
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -2225,882 +2333,6 @@ var journalSummaries = [];
 var journalPage = 0;
 var journalPageSize = 20;
 var journalCurrentId = null;
-
-async function loadJournalHistory() {
-  var list = document.getElementById('journal-hist-list');
-  try {
-    var res = await fetch(API + '/api/journal');
-    var editions = await res.json();
-    document.getElementById('journal-count').textContent = editions.length + ' edition' + (editions.length > 1 ? 's' : '');
-    if (!editions.length) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📰</div><div class="empty-state-title">Aucune édition</div><p>Générez votre première édition du journal.</p></div>';
-      return;
-    }
-    list.innerHTML = editions.map(function(e) {
-      var d = e.edition_date || e.created_at.slice(0,10);
-      return '<div class="journal-hist-item" data-jid="' + e.id + '" onclick="loadJournalEditionById(this)">' +
-        '<div style="font-size:22px;">📰</div>' +
-        '<div class="journal-hist-title">' + (e.title || 'Journal SubstanCiel') + '</div>' +
-        '<div class="journal-hist-meta">' + d + '</div>' +
-        '<button data-jid="' + e.id + '" onclick="deleteJournalEditionById(event,this)" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:4px;">✕</button>' +
-        '</div>';
-    }).join('');
-  } catch(e) {
-    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Erreur</div></div>';
-  }
-}
-
-async function loadJournalEdition(id) {
-  try {
-    var res = await fetch(API + '/api/journal/' + id);
-    var data = await res.json();
-    var sums = Array.isArray(data.summaries) ? data.summaries : JSON.parse(data.summaries || '[]');
-    journalSummaries = sums;
-    journalPage = 0;
-    journalCurrentId = id;
-    var num = id;
-    document.getElementById('journal-edition-num').textContent = 'Edition #' + num;
-    document.getElementById('journal-edition-date').textContent = data.edition_date || data.created_at.slice(0,10);
-    document.getElementById('journal-edition-count').textContent = sums.length + ' articles résumés';
-    renderJournalPage();
-    document.getElementById('journal-current').style.display = 'block';
-    document.getElementById('journal-hist-section').style.display = 'none';
-  } catch(e) { showToast('Erreur chargement édition'); }
-}
-
-function renderJournalPage() {
-  var start = journalPage * journalPageSize;
-  var page  = journalSummaries.slice(start, start + journalPageSize);
-  var totalPages = Math.ceil(journalSummaries.length / journalPageSize);
-  document.getElementById('journal-page-label').textContent = 'Page ' + (journalPage + 1) + ' / ' + totalPages;
-  document.getElementById('journal-page-info').textContent = (start+1) + '-' + Math.min(start+journalPageSize, journalSummaries.length) + ' sur ' + journalSummaries.length;
-  document.getElementById('journal-prev').disabled = journalPage === 0;
-  document.getElementById('journal-next').disabled = journalPage >= totalPages - 1;
-  var grid = document.getElementById('journal-grid');
-  grid.innerHTML = page.map(function(s) {
-    var imp = s.importance === 'haute' ? ' haute' : '';
-    var dateStr = s.date ? s.date.slice(5).replace('-','/') : '';
-    return '<div class="journal-card' + imp + '">' +
-      '<div class="journal-card-cat">' + (s.category || 'Actualité') + '</div>' +
-      '<div class="journal-card-title">' + s.title + '</div>' +
-      '<div class="journal-card-summary">' + (s.summary || '') + '</div>' +
-      '<div class="journal-card-footer">' +
-        '<span class="journal-card-source">' + (s.source || '') + '</span>' +
-        '<span>' + dateStr + '</span>' +
-        (s.url ? '<a class="journal-card-link" href="' + encodeURI(s.url) + '" target="_blank" onclick="event.stopPropagation()">→</a>' : '') +
-      '</div>' +
-      '</div>';
-  }).join('');
-}
-
-function journalChangePage(delta) {
-  var totalPages = Math.ceil(journalSummaries.length / journalPageSize);
-  journalPage = Math.max(0, Math.min(journalPage + delta, totalPages - 1));
-  renderJournalPage();
-  document.getElementById('journal-page-label').scrollIntoView({behavior:'smooth', block:'nearest'});
-}
-
-// Override journalPage function name conflict — rename onclick calls
-// The onclick uses journalPage(-1) — rename JS function
-function closeJournalCurrent() {
-  document.getElementById('journal-current').style.display = 'none';
-  document.getElementById('journal-hist-section').style.display = 'block';
-  journalCurrentId = null;
-}
-
-async function saveJournal() {
-  if (!journalSummaries.length) return;
-  var today = new Date().toLocaleDateString('fr-FR');
-  var title = 'Journal SubstanCiel — ' + today;
-  try {
-    var res = await fetch(API + '/api/journal', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({title: title, summaries: journalSummaries})
-    });
-    var data = await res.json();
-    journalCurrentId = data.id;
-    showToast('Edition sauvegardée !');
-    loadJournalHistory();
-  } catch(e) { showToast('Erreur sauvegarde'); }
-}
-
-async function deleteJournalEdition(e, id) {
-  e.stopPropagation();
-  await fetch(API + '/api/journal/' + id, {method: 'DELETE'});
-  loadJournalHistory();
-}
-
-function exportJournalHTML() {
-  if (!journalSummaries.length) { showToast('Aucune edition a exporter'); return; }
-  var today = new Date().toLocaleDateString('fr-FR');
-  var edNum = document.getElementById('journal-edition-num').textContent;
-  var cards = journalSummaries.map(function(s) {
-    var imp = s.importance === 'haute' ? 'border-top:3px solid #1a3c2e;' : 'border-top:3px solid #ddd;';
-    var dateStr = s.date ? s.date.slice(5).replace('-','/') : '';
-    return '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;break-inside:avoid;' + imp + '">' +
-      '<div style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#888;">' + (s.category || 'Actualite') + '</div>' +
-      '<div style="font-family:Georgia,serif;font-weight:700;font-size:13px;line-height:1.3;color:#111;">' + s.title + '</div>' +
-      '<div style="font-size:12px;color:#444;line-height:1.65;flex:1;">' + (s.summary || '') + '</div>' +
-      '<div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:6px;margin-top:4px;">' +
-        '<span style="font-weight:600;">' + (s.source||'') + '</span>' +
-        '<span>' + dateStr + '</span>' +
-        (s.url ? '<a href="' + s.url + '" style="color:#1a3c2e;font-weight:700;text-decoration:none;">Lire &rarr;</a>' : '') +
-      '</div></div>';
-  }).join('');
-  var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">' +
-    '<title>Journal SubstanCiel — ' + today + '</title>' +
-    '<style>body{font-family:Georgia,serif;background:#faf8f4;margin:0;padding:32px;}' +
-    '.masthead{border-bottom:3px solid #1a3c2e;padding-bottom:16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-end;}' +
-    '.name{font-size:2.4rem;font-weight:900;color:#1a3c2e;letter-spacing:-.03em;line-height:1;}' +
-    '.name em{font-style:italic;color:#7ab200;}' +
-    '.meta{font-size:11px;color:#888;text-align:right;line-height:1.6;}' +
-    '.divider{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#aaa;border-top:1px solid #ddd;border-bottom:1px solid #ddd;padding:5px 0;margin-bottom:16px;}' +
-    '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}' +
-    '@media print{body{padding:16px;}.grid{grid-template-columns:repeat(3,1fr);}}</style></head>' +
-    '<body>' +
-    '<div class="masthead"><div><div class="name">Sub<em>stan</em>Ciel</div><div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#aaa;margin-top:2px;">Journal de Veille</div></div>' +
-    '<div class="meta"><div style="font-size:13px;font-weight:700;color:#111;">' + edNum + '</div><div>' + today + '</div><div style="font-size:10px;">' + journalSummaries.length + ' articles</div></div></div>' +
-    '<div class="divider"><span>Actualites de la veille — resumes editoriaux</span></div>' +
-    '<div class="grid">' + cards + '</div>' +
-    '</body></html>';
-  var blob = new Blob([html], {type: 'text/html;charset=utf-8'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'journal-substanciel-' + today.replace(/\//g, '-') + '.html';
-  a.click();
-  showToast('Journal exporté !');
-}
-
-function exportJournalPDF() {
-  if (!journalSummaries.length) { showToast('Aucune edition a exporter'); return; }
-  var today = new Date().toLocaleDateString('fr-FR');
-  var edNum = document.getElementById('journal-edition-num').textContent;
-  var cards = journalSummaries.map(function(s) {
-    var imp = s.importance === 'haute' ? 'border-top:3px solid #1a3c2e;' : 'border-top:3px solid #ddd;';
-    var dateStr = s.date ? s.date.slice(5).replace('-','/') : '';
-    return '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:7px;break-inside:avoid;margin-bottom:12px;' + imp + '">' +
-      '<div style="font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#999;">' + (s.category || 'Actualite') + '</div>' +
-      '<div style="font-family:Georgia,serif;font-weight:700;font-size:12px;line-height:1.3;color:#111;">' + s.title + '</div>' +
-      '<div style="font-size:11px;color:#444;line-height:1.6;">' + (s.summary || '') + '</div>' +
-      '<div style="display:flex;justify-content:space-between;font-size:9px;color:#aaa;border-top:1px solid #eee;padding-top:5px;">' +
-        '<span style="font-weight:600;">' + (s.source||'') + '</span>' +
-        '<span>' + dateStr + '</span>' +
-      '</div></div>';
-  }).join('');
-  var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Journal SubstanCiel</title>' +
-    '<style>*{box-sizing:border-box;}body{font-family:Georgia,serif;background:#fff;margin:0;padding:20px 28px;color:#111;}' +
-    '.masthead{border-bottom:3px solid #1a3c2e;padding-bottom:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;}' +
-    '.name{font-size:2rem;font-weight:900;color:#1a3c2e;letter-spacing:-.03em;line-height:1;}' +
-    '.name em{font-style:italic;color:#7ab200;}' +
-    '.divider{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#aaa;border-top:1px solid #ddd;border-bottom:1px solid #ddd;padding:4px 0;margin-bottom:14px;display:flex;justify-content:space-between;}' +
-    '.grid{columns:3;column-gap:12px;}' +
-    '@media print{@page{margin:14mm;}body{padding:0;}.grid{columns:3;}}</style></head>' +
-    '<body>' +
-    '<div class="masthead"><div><div class="name">Sub<em>stan</em>Ciel</div><div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#aaa;margin-top:2px;">Journal de Veille</div></div>' +
-    '<div style="font-size:11px;color:#888;text-align:right;line-height:1.6;"><div style="font-size:12px;font-weight:700;color:#111;">' + edNum + '</div><div>' + today + '</div><div style="font-size:9px;">' + journalSummaries.length + ' articles</div></div></div>' +
-    '<div class="divider"><span>Actualites de la veille</span><span>' + today + '</span></div>' +
-    '<div class="grid">' + cards + '</div>' +
-    '</body></html>';
-  var w = window.open('', '_blank');
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  setTimeout(function(){ w.print(); }, 600);
-}
-
-async function generateJournal() {
-  var btn = document.getElementById('btn-gen-journal');
-  btn.disabled = true; btn.textContent = '⏳ Génération...';
-
-  var acts;
-  if (journalManualIds.size > 0) {
-    // Utiliser la sélection manuelle (boutons 📰 cliqués)
-    acts = allArticles.filter(function(a){ return journalManualIds.has(a.id); }).slice(0, 24);
-    journalManualIds.clear();
-    document.querySelectorAll('.abtn-journal.added').forEach(function(b){ b.classList.remove('added'); b.title='Ajouter au prochain journal'; });
-    var genBtn = document.getElementById('btn-gen-journal');
-    if (genBtn) genBtn.textContent = '📰 Générer';
-  } else {
-    // Filtrer par période
-    var periodDays = parseInt(document.getElementById('journal-period').value) || 0;
-    var cutoff = periodDays > 0 ? new Date(Date.now() - periodDays * 86400000) : null;
-    acts = allArticles.filter(function(a) {
-      var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
-      if (tags.indexOf('⭐ Actualité') < 0) return false;
-      if (cutoff && a.scraped_at && new Date(a.scraped_at) < cutoff) return false;
-      return true;
-    }).slice(0, 24);
-  }
-
-  if (!acts.length) {
-    showToast('Aucune actualité disponible'); btn.disabled=false; btn.textContent='📰 Générer une édition'; return;
-  }
-  try {
-    var res = await fetch(API + '/api/journal/summarize', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({articles: acts})
-    });
-    var data = await res.json();
-    if (data.error) throw new Error(data.error);
-    journalSummaries = data.summaries;
-    journalPage = 0;
-    journalCurrentId = null;
-    var today = new Date().toLocaleDateString('fr-FR');
-    document.getElementById('journal-edition-num').textContent = 'Nouvelle édition';
-    document.getElementById('journal-edition-date').textContent = today;
-    document.getElementById('journal-edition-count').textContent = journalSummaries.length + ' articles résumés';
-    renderJournalPage();
-    document.getElementById('journal-current').style.display = 'block';
-    document.getElementById('journal-hist-section').style.display = 'none';
-    showToast('Journal généré — pensez à sauvegarder !');
-  } catch(err) {
-    showToast('Erreur génération : ' + err.message);
-  }
-  btn.disabled=false; btn.textContent='📰 Générer une édition';
-}
-
-// Sélection manuelle pour le journal
-var journalManualIds = new Set();
-function addToJournalSelection(btn) {
-  var id = parseInt(btn.getAttribute('data-id'));
-  if (journalManualIds.has(id)) {
-    journalManualIds.delete(id);
-    btn.classList.remove('added');
-    btn.title = 'Ajouter au prochain journal';
-  } else {
-    journalManualIds.add(id);
-    btn.classList.add('added');
-    btn.title = 'Retirer du journal';
-  }
-  // Mettre à jour le compteur sur le bouton générer
-  var count = journalManualIds.size;
-  var genBtn = document.getElementById('btn-gen-journal');
-  if (genBtn && count > 0) genBtn.textContent = '📰 Générer (' + count + ' sélectionnés)';
-  else if (genBtn) genBtn.textContent = '📰 Générer';
-}
-
-function refreshVeille() {
-  var btn = document.querySelector('#panel-veille .disp-refresh-btn');
-  if (btn) { btn.classList.add('spinning'); setTimeout(function(){ btn.classList.remove('spinning'); }, 500); }
-  loadArticles();
-}
-function refreshDispositifs() {
-  var btn = document.querySelector('#panel-dispositifs .disp-refresh-btn');
-  if (btn) { btn.classList.add('spinning'); setTimeout(function(){ btn.classList.remove('spinning'); }, 500); }
-  loadDispositifs();
-}
-
-function loadJournalEditionById(el) { loadJournalEdition(parseInt(el.getAttribute('data-jid'))); }
-function deleteJournalEditionById(e, btn) { deleteJournalEdition(e, parseInt(btn.getAttribute('data-jid'))); }
-function openDispPptxById(btn) { openDispPptx(parseInt(btn.getAttribute('data-did'))); }
-
-function closeEpEmailModal() { var el = document.getElementById('ep-email-modal'); if(el) el.style.display='none'; }
-function closeV360Modal() { var el = document.getElementById('v360-modal'); if(el) el.style.display='none'; }
-
-async function init() {
-  buildSidebar();
-  updateLockState();
-  await Promise.all([loadArticles(), loadDispositifs()]);
-  loadJournalHistory();
-}
-
-// ── SIDEBAR ───────────────────────────────────────────────────────────
-function buildSidebar() {
-  const container = document.getElementById('filter-groups');
-  container.innerHTML = TAG_GROUPS.map(g => `
-    <div class="filter-group" id="fg-${g.key}">
-      <div class="filter-group-header" onclick="toggleGroup(\"${g.key}\")">
-        <span class="filter-group-label">${g.label}</span>
-        <span class="filter-group-count" id="fc-${g.key}">0</span>
-        <span class="filter-group-arrow">›</span>
-      </div>
-      <div class="filter-tags" id="ft-${g.key}">
-        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag(\"${g.key}\",\"${t.replace(/\"/g,"\\'")}',this)">${t}</span>`).join('')}
-      </div>
-    </div>
-  `).join('');
-  // Open first group by default
-  toggleGroup('ref');
-}
-
-function toggleGroup(key) {
-  document.getElementById('fg-' + key).classList.toggle('open');
-}
-
-
-function toggleTag(groupKey, tag, el) {
-  const s = filterState[groupKey].active;
-  if (s.has(tag)) { s.delete(tag); el.classList.remove('active'); }
-  else { s.add(tag); el.classList.add('active'); }
-  const count = s.size;
-  const badge = document.getElementById('fc-' + groupKey);
-  badge.textContent = count;
-  badge.classList.toggle('show', count > 0);
-  if (groupKey === 'ref') updateLockState();
-  applyFilters();
-}
-
-function updateLockState() {
-  const refActive = filterState['ref'] && filterState['ref'].active.size > 0;
-  TAG_GROUPS.forEach(g => {
-    if (g.key === 'ref') return;
-    const el = document.getElementById('fg-' + g.key);
-    if (el) el.classList.toggle('locked', !refActive);
-  });
-}
-
-function clearAllFilters() {
-  TAG_GROUPS.forEach(g => {
-    filterState[g.key].active.clear();
-    document.getElementById('fc-' + g.key).classList.remove('show');
-    document.querySelectorAll(`#ft-${g.key} .filter-tag`).forEach(el => el.classList.remove('active'));
-  });
-  applyFilters();
-}
-
-// ── LOAD DATA ─────────────────────────────────────────────────────────
-async function loadArticles() {
-  try {
-    const res = await fetch(API + '/api/articles?limit=2000');
-    allArticles = await res.json();
-    updateStats();
-    applyFilters();
-  } catch(e) {
-    document.getElementById('articles-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Erreur de chargement</div></div>';
-  }
-}
-
-var collectedUrls = new Set();
-
-async function loadDispositifs() {
-  try {
-    var res = await fetch(API + '/api/dispositifs');
-    allDispositifs = await res.json();
-    // Construire le Set des URLs déjà collectées pour comparaison rapide
-    collectedUrls = new Set(allDispositifs.map(function(d){ return (d.source_url||'').toLowerCase(); }));
-    document.getElementById('st-dispositifs').textContent = allDispositifs.length;
-    renderDispositifs(allDispositifs);
-  } catch(e) {}
-}
-
-function updateStats() {
-  var taggedCount = allArticles.filter(function(a){ var t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.length>0 && !(t.length===1 && t[0]===''); }).length;
-  document.getElementById('st-articles').textContent = taggedCount;
-  const today = new Date().toDateString();
-  const todayCount = allArticles.filter(a => new Date(a.scraped_at).toDateString() === today).length;
-  document.getElementById('st-today').textContent = todayCount;
-  const cdcCount = allArticles.filter(a => a.pdf_url).length;
-  document.getElementById('st-cdc').textContent = cdcCount;
-  renderCDC(allArticles.filter(a => a.pdf_url));
-}
-
-// ── FILTERING ─────────────────────────────────────────────────────────
-// ── FILTRES VUE ──────────────────────────────────────────────────────
-var viewFilter = 'all'; // all | actu | disp | cdc
-
-function setViewFilter(mode, el) {
-  viewFilter = mode;
-  document.querySelectorAll('.vf-btn').forEach(function(b){ b.classList.remove('active'); });
-  if (el) el.classList.add('active');
-  applyFilters();
-}
-
-function setSortFromSelect(sel) {
-  sortMode = sel.value;
-  applyFilters();
-}
-
-function applyFilters() {
-  var filtered = allArticles;
-
-  // 1. Filtre de vue (onglets)
-  if (viewFilter === 'actu') {
-    filtered = filtered.filter(function(a) {
-      var t = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
-      return t.indexOf('⭐ Actualité') >= 0;
-    });
-  } else if (viewFilter === 'disp') {
-    filtered = filtered.filter(function(a) {
-      var t = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
-      return t.indexOf('⭐ Dispositif') >= 0;
-    });
-  } else if (viewFilter === 'cdc') {
-    filtered = filtered.filter(function(a) { return !!a.pdf_url; });
-  }
-
-  // 2. Recherche texte
-  if (searchQ) {
-    var q = searchQ.toLowerCase();
-    filtered = filtered.filter(function(a) {
-      return (a.title||'').toLowerCase().includes(q) ||
-             (a.summary||'').toLowerCase().includes(q) ||
-             (a.source||'').toLowerCase().includes(q);
-    });
-  }
-
-  // 3. Filtres tags sidebar
-  TAG_GROUPS.forEach(function(g) {
-    var active = filterState[g.key].active;
-    if (!active.size) return;
-    filtered = filtered.filter(function(a) {
-      var tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
-      return [...active].some(function(t){ return tags.includes(t); });
-    });
-  });
-
-  // 4. Tri
-  if (sortMode === 'cdc') {
-    filtered.sort(function(a, b) {
-      if (a.pdf_url && !b.pdf_url) return -1;
-      if (!a.pdf_url && b.pdf_url) return 1;
-      return new Date(b.scraped_at) - new Date(a.scraped_at);
-    });
-  } else if (sortMode === 'dispositif') {
-    filtered.sort(function(a, b) {
-      var ad = (Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]')).includes('⭐ Dispositif');
-      var bd = (Array.isArray(b.tags)?b.tags:JSON.parse(b.tags||'[]')).includes('⭐ Dispositif');
-      if (ad && !bd) return -1; if (!ad && bd) return 1;
-      return new Date(b.scraped_at) - new Date(a.scraped_at);
-    });
-  } else {
-    filtered.sort(function(a, b) { return new Date(b.scraped_at) - new Date(a.scraped_at); });
-  }
-
-  document.getElementById('result-count').textContent = filtered.length + ' article' + (filtered.length > 1 ? 's' : '');
-  renderArticles(filtered);
-}
-
-// ── RENDER ARTICLES ───────────────────────────────────────────────────
-function renderArticles(list) {
-  var DISP = '⭐ Dispositif', ACT = '⭐ Actualité';
-  var disps = list.filter(function(a){ var t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.indexOf(DISP)>=0; });
-  var acts  = list.filter(function(a){ var t=Array.isArray(a.tags)?a.tags:JSON.parse(a.tags||'[]'); return t.indexOf(ACT)>=0; });
-  var container = document.getElementById('articles-list');
-  if (!disps.length && !acts.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-title">Aucun résultat</div><p>Sélectionnez ⭐ Dispositif ou ⭐ Actualité</p></div>';
-    return;
-  }
-  var html = '';
-  if (disps.length) {
-    html += '<div class="section-label">⭐ Dispositifs <span class="section-count">'+disps.length+'</span></div>';
-    html += renderCards(disps, true);
-  }
-  if (acts.length) {
-    html += '<div class="section-label">📰 Actualités <span class="section-count">'+acts.length+'</span></div>';
-    html += renderCards(acts, false);
-  }
-  container.innerHTML = html;
-  // Attacher les events après injection
-  container.querySelectorAll('.abtn-collect').forEach(function(btn){
-    btn.addEventListener('click', collectFromVeille);
-  });
-  container.querySelectorAll('.card-title-link').forEach(function(a){
-    a.addEventListener('click', function(e){ e.stopPropagation(); });
-  });
-}
-
-function renderCards(list, showCollect) {
-  return list.map(function(a) {
-    var tags     = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
-    var isDisp   = tags.indexOf('⭐ Dispositif') >= 0;
-    var hasCDC   = !!a.pdf_url;
-    var date     = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}) : '';
-    var subTags  = tags.filter(function(t){ return t.charAt(0) !== '⭐'; }).slice(0, 4);
-
-    // Construire les badges tags
-    var tagsHTML = (isDisp ? '<span class="atag atag-ref">⭐ Dispositif</span>' : '<span class="atag">⭐ Actualité</span>');
-    tagsHTML += subTags.map(function(t){ return '<span class="atag">'+t+'</span>'; }).join('');
-
-    // Ligne d'actions : CDC + Collecter — PAS de lien imbriqué dans lien
-    var actionsHTML = '';
-    if (showCollect) {
-      if (hasCDC) {
-        actionsHTML += '<button class="abtn abtn-cdc" onclick="openCDC(this);event.stopPropagation();" data-url="'+encodeURI(a.pdf_url)+'">📋 CDC</button>';
-      } else {
-        actionsHTML += '<span class="abtn abtn-nocdc">📋 Pas de CDC</span>';
-      }
-      var alreadyCollected = collectedUrls.has((a.url||'').toLowerCase());
-      if (alreadyCollected) {
-        actionsHTML += '<span class="abtn abtn-collected">✓ Collecté</span>';
-      } else {
-        actionsHTML += '<button class="abtn abtn-collect'+(hasCDC?' abtn-collect-cdc':'')+'" data-url="'+encodeURIComponent(a.url||'')+'" data-title="'+encodeURIComponent(a.title||'')+'" data-id="'+(a.id||0)+'" data-pdf="'+encodeURIComponent(a.pdf_url||'')+'">💾 Collecter</button>';
-      }
-    } else {
-      // Bouton Lire + Ajouter au Journal
-      var safeArticleUrl = (a.url||'').replace(/"/g,'\"');
-      actionsHTML += '<a class="abtn abtn-resume" href="'+safeArticleUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 Lire</a>';
-      actionsHTML += '<button class="abtn abtn-journal" onclick="addToJournalSelection(this);event.stopPropagation();" data-id="'+(a.id||0)+'" title="Ajouter au prochain journal">📰</button>';
-    }
-
-    var card = '<div class="acard'+(isDisp?' acard-disp':'')+(hasCDC?' acard-cdc':'')+'">';
-    card += '<div class="acard-header">';
-    card += '<span class="acard-source">'+(a.source||'')+'</span>';
-    card += '<span class="acard-date">'+date+'</span>';
-    card += '</div>';
-    card += '<div class="acard-title"><a class="card-title-link" href="'+encodeURI(a.url||'')+'" target="_blank">'+a.title+'</a></div>';
-    if (a.summary) card += '<div class="acard-summary">'+a.summary+'</div>';
-    card += '<div class="acard-footer"><div class="acard-tags">'+tagsHTML+'</div><div class="acard-actions">'+actionsHTML+'</div></div>';
-    card += '</div>';
-    return card;
-  }).join('');
-}
-
-
-// ── RENDER DISPOSITIFS ────────────────────────────────────────────────
-function renderDispositifs(list) {
-  const container = document.getElementById('disp-grid');
-  document.getElementById('disp-count').textContent = list.length + ' dispositif' + (list.length > 1 ? 's' : '');
-  if (!list.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🗄</div><div class="empty-state-title">Aucun dispositif collecté</div></div>';
-    return;
-  }
-  container.innerHTML = list.map(d => {
-    const empty = v => !v || v === 'Information non fournie';
-    return `<div class="disp-card">
-      <div class="disp-card-header">
-        <div class="disp-card-icon">📄</div>
-        <div>
-          <div class="disp-card-title">${d.titre || 'Dispositif'}</div>
-          <div class="disp-card-financeur">${d.guichet_financeur || ''}</div>
-        </div>
-      </div>
-      ${!empty(d.beneficiaire) ? `<div class="disp-field"><div class="disp-field-label">Bénéficiaires</div><div class="disp-field-val">${d.beneficiaire}</div></div>` : ''}
-      ${!empty(d.territoire) ? `<div class="disp-field"><div class="disp-field-label">Territoire</div><div class="disp-field-val">${d.territoire}</div></div>` : ''}
-      ${!empty(d.montants_taux) ? `<div class="disp-field"><div class="disp-field-label">Montants & taux</div><div class="disp-field-val">${d.montants_taux}</div></div>` : ''}
-      ${!empty(d.date_fermeture) ? `<div class="disp-field"><div class="disp-field-label">Clôture</div><div class="disp-field-val">${d.date_fermeture}</div></div>` : ''}
-      <div class="disp-card-footer">
-        <button class="disp-btn primary" onclick="openDispModal(${d.id})">👁 Voir le détail</button>
-        <a class="disp-btn" href="/api/dispositifs/${d.id}/export-pptx" target="_blank">📊 PPTX</a>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ── FILTER DISPOSITIFS ───────────────────────────────────────────────
-// ── VUE DISPOSITIFS ───────────────────────────────────────────────────
-var dispView = 'cards';
-var dispSortCol = '';
-var dispSortDir = 1;
-
-function setDispView(mode, btn) {
-  dispView = mode;
-  document.querySelectorAll('.dv-btn').forEach(function(b){ b.classList.remove('active'); });
-  if (btn) btn.classList.add('active');
-  document.getElementById('disp-grid').style.display      = mode === 'cards' ? '' : 'none';
-  document.getElementById('disp-table-wrap').style.display = mode === 'table' ? '' : 'none';
-  filterDispositifs();
-}
-
-function sortDispTable(col) {
-  if (dispSortCol === col) dispSortDir *= -1;
-  else { dispSortCol = col; dispSortDir = 1; }
-  filterDispositifs();
-}
-
-function filterDispositifs() {
-  var q      = (document.getElementById('disp-search').value || '').toLowerCase();
-  var benef  = document.getElementById('disp-filter-benef').value;
-  var terr   = document.getElementById('disp-filter-territoire').value;
-  var nature = (document.getElementById('disp-filter-nature') || {}).value || '';
-  var depot  = (document.getElementById('disp-filter-depot') || {}).value || '';
-
-  var list = allDispositifs.filter(function(d) {
-    if (q && !(
-      (d.titre||'').toLowerCase().includes(q) ||
-      (d.guichet_financeur||'').toLowerCase().includes(q) ||
-      (d.objectif||'').toLowerCase().includes(q) ||
-      (d.beneficiaire||'').toLowerCase().includes(q)
-    )) return false;
-    if (benef  && !(d.beneficiaire||'').toLowerCase().includes(benef.toLowerCase())) return false;
-    if (terr   && !(d.territoire||'').toLowerCase().includes(terr.toLowerCase())) return false;
-    if (nature && !(d.nature||'').toLowerCase().includes(nature.toLowerCase())) return false;
-    if (depot  && !(d.type_depot||'').toLowerCase().includes(depot.toLowerCase())) return false;
-    return true;
-  });
-
-  if (dispSortCol) {
-    list = list.slice().sort(function(a, b) {
-      var va = (a[dispSortCol] || '').toLowerCase();
-      var vb = (b[dispSortCol] || '').toLowerCase();
-      return va < vb ? -dispSortDir : va > vb ? dispSortDir : 0;
-    });
-  } else {
-    // Tri par défaut : plus récemment collecté en premier
-    list = list.slice().sort(function(a, b) {
-      return new Date(b.collected_at||0) - new Date(a.collected_at||0);
-    });
-  }
-
-  document.getElementById('disp-count').textContent = list.length + ' dispositif' + (list.length > 1 ? 's' : '');
-  renderDispositifs(list);
-  if (dispView === 'table') renderDispTable(list);
-}
-
-function renderDispTable(list) {
-  var tbody = document.getElementById('disp-table-body');
-  if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;padding:32px;color:var(--muted);">Aucun dispositif</td></tr>';
-    return;
-  }
-  function cell(v) { return v && v !== 'Information non fournie' ? v : '<span class="dt-empty">—</span>'; }
-  function depotBadge(v) {
-    var cls = 'dt-badge ';
-    if (!v || v === 'Information non fournie') return '<span class="dt-empty">—</span>';
-    var vl = v.toLowerCase();
-    if (vl.includes('fil') || vl.includes('continu')) cls += 'dt-badge-depot-eau';
-    else if (vl.includes('clôtur') || vl.includes('clotur')) cls += 'dt-badge-depot-clos';
-    else if (vl.includes('attente') || vl.includes('renouvell')) cls += 'dt-badge-depot-att';
-    else cls += 'dt-badge-depot-date';
-    return '<span class="' + cls + '">' + v + '</span>';
-  }
-  tbody.innerHTML = list.map(function(d) {
-    return '<tr>' +
-      '<td title="' + (d.titre||'') + '" style="font-weight:700;max-width:200px;">' + cell(d.titre) + '</td>' +
-      '<td>' + cell(d.guichet_financeur) + '</td>' +
-      '<td>' + cell(d.nature) + '</td>' +
-      '<td>' + cell(d.beneficiaire) + '</td>' +
-      '<td>' + cell(d.territoire) + '</td>' +
-      '<td>' + depotBadge(d.type_depot) + '</td>' +
-      '<td>' + cell(d.date_fermeture) + '</td>' +
-      '<td class="wrap" style="max-width:180px;white-space:normal;">' + cell(d.montants_taux) + '</td>' +
-      '<td class="wrap" style="max-width:180px;white-space:normal;">' + cell(d.objectif) + '</td>' +
-      '<td class="wrap" style="max-width:180px;white-space:normal;">' + cell(d.depenses_eligibles) + '</td>' +
-      '<td class="wrap" style="max-width:180px;white-space:normal;">' + cell(d.criteres_eligibilite) + '</td>' +
-      '<td class="wrap" style="max-width:160px;white-space:normal;">' + cell(d.points_vigilance) + '</td>' +
-      '<td>' + cell(d.guichet_instructeur) + '</td>' +
-      '<td>' + cell(d.programme_europeen) + '</td>' +
-      '<td>' + cell(d.contact) + '</td>' +
-      '<td style="text-align:center;white-space:nowrap;">' +
-        '<button class="dt-export-btn" data-did="' + (d.id||0) + '" onclick="openDispPptxById(this)">📊 PPTX</button>' +
-      '</td>' +
-      '</tr>';
-  }).join('');
-}
-
-
-// ── COLLECT ALL MISSING ───────────────────────────────────────────────
-function toggleCollectMenu() {
-  const menu = document.getElementById('collect-submenu');
-  if (!menu) return;
-  const isOpen = menu.style.display !== 'none';
-  menu.style.display = isOpen ? 'none' : 'block';
-  if (!isOpen) {
-    setTimeout(() => {
-      document.addEventListener('click', function closeMenu(e) {
-        if (!document.getElementById('collect-all-wrap')?.contains(e.target)) {
-          menu.style.display = 'none';
-          document.removeEventListener('click', closeMenu);
-        }
-      });
-    }, 10);
-  }
-}
-
-async function collectAllMissing(mode) {
-  // mode: 'all' | 'cdc' | 'nocdc'
-  const menuEl = document.getElementById('collect-submenu');
-  if (menuEl) menuEl.style.display = 'none';
-  const btn = document.getElementById('btn-collect-all');
-  const resetBtn = () => { btn.disabled = false; btn.innerHTML = '📥 Collecter tous les dispositifs <span style="font-size:9px;opacity:.8">▾</span>'; };
-  btn.disabled = true;
-  btn.innerHTML = '⏳ Chargement…';
-  try {
-    const arts = await fetch(API + '/api/articles?limit=2000').then(r => r.json());
-    const collected = new Set(allDispositifs.map(d => d.source_url).filter(Boolean));
-    let toCollect = arts.filter(a => {
-      const tags = Array.isArray(a.tags) ? a.tags : JSON.parse(a.tags || '[]');
-      return tags.includes('⭐ Dispositif') && !collected.has(a.url);
-    });
-    if (mode === 'cdc')   toCollect = toCollect.filter(a => !!a.pdf_url);
-    if (mode === 'nocdc') toCollect = toCollect.filter(a => !a.pdf_url);
-
-    const modeLabel = mode === 'cdc' ? 'avec CDC' : mode === 'nocdc' ? 'sans CDC' : '';
-    if (!toCollect.length) {
-      showToast('✅ Aucun dispositif ' + modeLabel + ' à collecter !');
-      resetBtn(); return;
-    }
-    if (!confirm('Collecter ' + toCollect.length + ' dispositif(s) ' + (modeLabel ? '(' + modeLabel + ')' : '') + ' ? Cela utilisera des crédits Claude.')) {
-      resetBtn(); return;
-    }
-    let done = 0, errors = 0;
-    for (const a of toCollect) {
-      btn.innerHTML = '⏳ ' + (done + errors + 1) + '/' + toCollect.length + '…';
-      try {
-        const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 28000);
-        const d = await fetch(API + '/api/collect', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({url: a.url, title: a.title, id: a.id, pdf_url: a.pdf_url || ''}),
-          signal: ctrl.signal
-        }).then(r => { clearTimeout(tid); return r.json(); });
-        if (!d.error) {
-          await fetch(API + '/api/dispositifs', {
-            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(d)
-          });
-          done++;
-        } else { errors++; }
-      } catch(e) { errors++; }
-    }
-    showToast('✅ ' + done + ' collecté(s)' + (errors ? ' — ' + errors + ' erreur(s)' : ''));
-    loadDispositifs();
-  } catch(e) {
-    showToast('❌ Erreur : ' + e.message);
-  }
-  resetBtn();
-}
-
-
-function renderCDC(list) {
-  const container = document.getElementById('cdc-list');
-  document.getElementById('cdc-count').textContent = list.length + ' document' + (list.length > 1 ? 's' : '');
-  if (!list.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-title">Aucun cahier des charges trouvé</div><p>Lancez une analyse CDC depuis l’espace de veille</p></div>';
-    return;
-  }
-  container.innerHTML = list.map(a => {
-    const ext = (a.pdf_url||'').split('.').pop().toUpperCase().slice(0,4);
-    const date = a.scraped_at ? new Date(a.scraped_at).toLocaleDateString('fr-FR') : '';
-    return `<div class="cdc-card">
-      <div class="cdc-icon">📄</div>
-      <div class="cdc-info">
-        <div class="cdc-title">${a.title}</div>
-        <div class="cdc-meta">${a.source || ''} · ${date} · ${ext || 'DOC'}</div>
-      </div>
-      <div class="cdc-actions">
-        <a class="cdc-btn" href="${a.url}" target="_blank" rel="noopener">🔗 Fiche</a>
-        <a class="cdc-btn dl" href="${a.pdf_url}" target="_blank" rel="noopener" download>⬇ Télécharger</a>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ── MODAL DISPOSITIF ──────────────────────────────────────────────────
-function openDispModal(id) {
-  const d = allDispositifs.find(x => x.id === id);
-  if (!d) return;
-  currentDispId = id;
-  document.getElementById('modal-title').textContent = '📄 ' + (d.titre || 'Dispositif');
-  const fields = [
-    ["Guichet financeur", d.guichet_financeur],
-    ["Guichet instructeur", d.guichet_instructeur],
-    ["Nature", d.nature],
-    ["Bénéficiaires", d.beneficiaire],
-    ["Type de dépôt", d.type_depot],
-    ["Date de clôture", d.date_fermeture],
-    ["Montants & taux", d.montants_taux],
-    ["Territoire", d.territoire],
-    ["Thématiques", d.thematiques],
-    ["Objectif", d.objectif, true],
-    ["Dépenses éligibles", d.depenses_eligibles, true],
-    ["Critères d’éligibilité", d.criteres_eligibilite, true],
-    ["Points de vigilance", d.points_vigilance, true],
-    ["Contact", d.contact],
-  ];
-  const empty = v => !v || v === 'Information non fournie';
-  document.getElementById('modal-body').innerHTML = fields.map(([label, val, full]) => {
-    const isEmpty = empty(val);
-    return `<div class="modal-field${full ? ' full' : ''}">
-      <div class="modal-field-label">${label}</div>
-      <div class="modal-field-val${isEmpty ? ' empty' : ''}">${isEmpty ? 'Non renseigné' : val}</div>
-    </div>`;
-  }).join('');
-  document.getElementById('modal').classList.add('open');
-}
-function closeModal() { document.getElementById('modal').classList.remove('open'); }
-function openDispPptx(id) {
-  window.open(API + '/api/dispositifs/' + id + '/export-pptx', '_blank');
-}
-
-function exportDispPptx() {
-  if (currentDispId) window.open(API + '/api/dispositifs/' + currentDispId + '/export-pptx', '_blank');
-}
-
-// ── NAV ───────────────────────────────────────────────────────────────
-function switchTab(tab, btn) {
-  activeTab = tab;
-  document.querySelectorAll('.header-tab').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-' + tab).classList.add('active');
-  if (tab === 'veille360') loadV360Sessions();
-  if (tab === 'dispositifs') loadDispositifs();
-}
-
-// ── PRÉ-VEILLE 360° ──────────────────────────────────────────────────
-async function loadV360Sessions() {
-  var list = document.getElementById('v360-sessions-list');
-  var countEl = document.getElementById('v360-sessions-count');
-  try {
-    var res = await fetch(API + '/api/veille360/sessions');
-    var sessions = await res.json();
-    if (countEl) countEl.textContent = sessions.length + ' analyse' + (sessions.length > 1 ? 's' : '');
-    if (!sessions.length) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">Aucune analyse</div><p>Lancez votre première analyse 360°.</p></div>';
-      return;
-    }
-    list.innerHTML = sessions.map(function(s) {
-      var date = s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : '';
-      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="loadV360Session(\" + s.id + \")">' +
-        '<div style="flex:1;"><div style="font-weight:700;font-size:13px;">' + (s.client_name||'Sans nom') + '</div>' +
-        '<div style="font-size:11px;color:var(--muted);">' + date + '</div></div>' +
-        '<button onclick="deleteV360Session(event,\" + s.id + \")" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:4px;">✕</button>' +
-        '</div>';
-    }).join('');
-  } catch(e) {}
-}
-
-async function loadV360Session(id) {
-  var res = await fetch(API + '/api/veille360/sessions/' + id);
-  var session = await res.json();
-  if (session.result_html) {
-    document.getElementById('v360-modal-body').innerHTML = session.result_html;
-    document.getElementById('v360-modal').style.display = 'flex';
-    document.getElementById('v360-modal-title').textContent = 'Analyse 360° — ' + (session.client_name||'');
-  }
-}
-
-async function deleteV360Session(e, id) {
-  e.stopPropagation();
-  await fetch(API + '/api/veille360/sessions/' + id, {method:'DELETE'});
-  loadV360Sessions();
-}
-
-async function runV360() {
-  var clientInput = document.getElementById('v360-client-input');
-  var projectInput = document.getElementById('v360-project');
-  var statusEl = document.getElementById('v360-status-inline');
-  var btn = document.getElementById('v360-run-btn');
-  var client = (clientInput ? clientInput.value : '') || 'Client';
-  var project = projectInput ? projectInput.value.trim() : '';
-  if (!project) { if (projectInput) projectInput.focus(); return; }
-  btn.disabled = true; btn.textContent = '⏳ Analyse…';
-  if (statusEl) statusEl.textContent = 'Analyse en cours — environ 20 secondes…';
-  try {
-    var res = await fetch(API + '/api/veille360', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({project_desc: project, client_name: client})
-    });
-    var data = await res.json();
-    if (data.error) throw new Error(data.error);
-    var html = data.result_html || data.html || '';
-    document.getElementById('v360-modal-body').innerHTML = html;
-    document.getElementById('v360-modal').style.display = 'flex';
-    document.getElementById('v360-modal-title').textContent = 'Analyse 360° — ' + client;
-    if (statusEl) statusEl.textContent = '';
-    await fetch(API + '/api/veille360/sessions', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({client_name: client, project_desc: project, result_html: html})
-    });
-    loadV360Sessions();
-  } catch(err) {
-    if (statusEl) statusEl.textContent = 'Erreur : ' + err.message;
-  }
-  btn.disabled = false; btn.textContent = '🔍 Lancer une analyse';
-}
-
 
 // ── JOURNAL ───────────────────────────────────────────────────────────
 var journalSummaries = [];
@@ -3396,13 +2628,13 @@ function buildSidebar() {
   const container = document.getElementById('filter-groups');
   container.innerHTML = TAG_GROUPS.map(g => `
     <div class="filter-group" id="fg-${g.key}">
-      <div class="filter-group-header" onclick="toggleGroup(\"${g.key}\")">
+      <div class="filter-group-header" onclick="toggleGroup('${g.key}')">
         <span class="filter-group-label">${g.label}</span>
         <span class="filter-group-count" id="fc-${g.key}">0</span>
         <span class="filter-group-arrow">›</span>
       </div>
       <div class="filter-tags" id="ft-${g.key}">
-        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag(\"${g.key}\",\"${t.replace(/\"/g,"\\'")}',this)">${t}</span>`).join('')}
+        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag('${g.key}','${t.replace(/'/g,"\\'")}',this)">${t}</span>`).join('')}
       </div>
     </div>
   `).join('');
@@ -3614,7 +2846,7 @@ function renderCards(list, showCollect) {
       }
     } else {
       // Bouton Lire + Ajouter au Journal
-      var safeArticleUrl = (a.url||'').replace(/"/g,'\"');
+      var safeArticleUrl = (a.url||'').replace(/"/g,'&quot;');
       actionsHTML += '<a class="abtn abtn-resume" href="'+safeArticleUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 Lire</a>';
       actionsHTML += '<button class="abtn abtn-journal" onclick="addToJournalSelection(this);event.stopPropagation();" data-id="'+(a.id||0)+'" title="Ajouter au prochain journal">📰</button>';
     }
@@ -3765,6 +2997,328 @@ function renderDispTable(list) {
 }
 
 
+// ── COLLECTE MANUELLE ─────────────────────────────────────────────────
+var manualCollectData = null;
+var MC_FIELDS = [
+  ['Titre',              'titre'],
+  ['Guichet financeur',  'guichet_financeur'],
+  ['Guichet instructeur','guichet_instructeur'],
+  ['Nature',             'nature'],
+  ['Beneficiaire',       'beneficiaire'],
+  ['Type de depot',      'type_depot'],
+  ['Date de fermeture',  'date_fermeture'],
+  ['Objectif',           'objectif'],
+  ['Types de depenses',  'types_depenses'],
+  ['Operations eligibles','operations_eligibles'],
+  ['Depenses eligibles', 'depenses_eligibles'],
+  ['Criteres eligibilite','criteres_eligibilite'],
+  ['Depenses ineligibles','depenses_ineligibles'],
+  ['Montants et taux',   'montants_taux'],
+  ['Thematiques',        'thematiques'],
+  ['Territoire',         'territoire'],
+  ['Points de vigilance','points_vigilance'],
+  ['Contact',            'contact'],
+  ['Programme europeen', 'programme_europeen']
+];
+
+function openManualCollect() {
+  manualCollectData = null;
+  mc_excel_file = null;
+  document.getElementById('mc-url-input').value = '';
+  document.getElementById('mc-cdc-status').textContent = '';
+  document.getElementById('mc-result-area').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:24px 0;">Entrez une URL puis cliquez sur Analyser.</div>';
+  document.getElementById('mc-footer').style.display = 'none';
+  document.getElementById('mc-run-btn').disabled = false;
+  document.getElementById('mc-run-btn').textContent = 'Analyser';
+  document.getElementById('mc-batch-area').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:28px 0;">Importez un fichier Excel pour démarrer la collecte.</div>';
+  document.getElementById('mc-batch-btn').disabled = true;
+  document.getElementById('mc-batch-btn').textContent = 'Lancer la collecte';
+  document.getElementById('mc-batch-btn').onclick = runBatchCollect;
+  document.getElementById('mc-file-name').style.display = 'none';
+  document.getElementById('mc-file-input').value = '';
+  document.getElementById('mc-dropzone').style.borderColor = 'var(--border)';
+  document.getElementById('mc-dropzone').style.background = '';
+  document.getElementById('mc-pkg-check').checked = false;
+  document.getElementById('mc-pkg-name-wrap').style.display = 'none';
+  document.getElementById('mc-pkg-name').value = '';
+  switchMcTab('url');
+  document.getElementById('manual-collect-modal').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('mc-url-input').focus(); }, 100);
+}
+
+function closeManualCollect() {
+  document.getElementById('manual-collect-modal').style.display = 'none';
+}
+
+async function runManualCollect() {
+  var url = document.getElementById('mc-url-input').value.trim();
+  if (!url) { document.getElementById('mc-url-input').style.borderColor = '#c8392b'; return; }
+  var btn = document.getElementById('mc-run-btn');
+  btn.disabled = true;
+  btn.textContent = 'Analyse en cours…';
+  document.getElementById('mc-cdc-status').textContent = 'Scraping en cours…';
+  document.getElementById('mc-footer').style.display = 'none';
+  document.getElementById('mc-result-area').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:32px;color:var(--muted);"><div class="spinner"></div><div style="font-size:12px;">Analyse IA en cours (15-25 s)…</div></div>';
+  try {
+    var res = await fetch(API + '/api/collect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url: url, title: ''})
+    });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+    manualCollectData = data;
+    manualCollectData.source_url = url;
+    if (data.cdc_url) {
+      var fname = data.cdc_url.split('/').slice(-1)[0].substring(0, 50);
+      document.getElementById('mc-cdc-status').innerHTML = 'CDC detecte et analyse en priorite : <a href="' + data.cdc_url + '" target="_blank" style="color:var(--accent);">' + fname + '</a>';
+    } else {
+      document.getElementById('mc-cdc-status').textContent = 'Pas de CDC detecte — analyse basee sur la page web';
+    }
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;">';
+    MC_FIELDS.forEach(function(f) {
+      var val = data[f[1]];
+      var empty = !val || val === 'Information non fournie';
+      var disp = empty ? '<em style="color:var(--muted2);">Non renseigne</em>' : val;
+      html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;' + (empty ? 'opacity:0.55;' : '') + '">';
+      html += '<div style="font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">' + f[0] + '</div>';
+      html += '<div style="font-size:12px;line-height:1.4;">' + disp + '</div></div>';
+    });
+    html += '</div>';
+    document.getElementById('mc-result-area').innerHTML = html;
+    document.getElementById('mc-footer').style.display = 'flex';
+  } catch(e) {
+    document.getElementById('mc-cdc-status').textContent = '';
+    document.getElementById('mc-result-area').innerHTML = '<div style="background:rgba(200,57,43,0.07);border:1px solid rgba(200,57,43,0.2);border-radius:6px;padding:14px;color:#a0291e;font-size:12px;">Erreur : ' + e.message + '</div>';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Analyser';
+}
+
+async function saveManualCollect() {
+  if (!manualCollectData) return;
+  var btn = document.getElementById('mc-save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sauvegarde…';
+  try {
+    var res = await fetch(API + '/api/dispositifs', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(manualCollectData)
+    });
+    var saved = await res.json();
+    if (saved.status === 'duplicate') {
+      showToast('Dispositif deja dans la base !');
+    } else {
+      showToast('Dispositif ajoute a la base !');
+      closeManualCollect();
+      loadDispositifs();
+    }
+  } catch(e) {
+    showToast('Erreur sauvegarde : ' + e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = 'Sauvegarder';
+}
+
+// ── MODAL TABS ────────────────────────────────────────────────────────
+function switchMcTab(tab) {
+  document.getElementById('mc-pane-url').style.display = tab === 'url' ? 'flex' : 'none';
+  document.getElementById('mc-pane-excel').style.display = tab === 'excel' ? 'flex' : 'none';
+  document.getElementById('mc-tab-url').style.background = tab === 'url' ? 'var(--surface)' : 'transparent';
+  document.getElementById('mc-tab-url').style.color = tab === 'url' ? 'var(--accent)' : 'var(--muted)';
+  document.getElementById('mc-tab-url').style.borderBottomColor = tab === 'url' ? 'var(--accent)' : 'transparent';
+  document.getElementById('mc-tab-excel').style.background = tab === 'excel' ? 'var(--surface)' : 'transparent';
+  document.getElementById('mc-tab-excel').style.color = tab === 'excel' ? 'var(--accent)' : 'var(--muted)';
+  document.getElementById('mc-tab-excel').style.borderBottomColor = tab === 'excel' ? 'var(--accent)' : 'transparent';
+}
+
+// ── EXCEL UPLOAD ──────────────────────────────────────────────────────
+var mc_excel_file = null;
+
+function onExcelFileSelected(input) {
+  var f = input.files[0];
+  if (!f) return;
+  mc_excel_file = f;
+  var fn = document.getElementById('mc-file-name');
+  fn.textContent = f.name + ' — prêt';
+  fn.style.display = 'block';
+  document.getElementById('mc-batch-btn').disabled = false;
+  document.getElementById('mc-dropzone').style.borderColor = 'var(--accent)';
+  document.getElementById('mc-dropzone').style.background = 'var(--lime-bg)';
+  document.getElementById('mc-batch-area').innerHTML = '<div style="text-align:center;color:var(--accent);font-size:12px;padding:24px 0;font-weight:600;">Fichier chargé — cliquez sur Lancer la collecte.</div>';
+}
+
+function togglePkgName() {
+  var checked = document.getElementById('mc-pkg-check').checked;
+  document.getElementById('mc-pkg-name-wrap').style.display = checked ? 'block' : 'none';
+  if (checked) setTimeout(function(){ document.getElementById('mc-pkg-name').focus(); }, 80);
+}
+
+async function runBatchCollect() {
+  if (!mc_excel_file) { showToast('Importez un fichier Excel'); return; }
+  var btn = document.getElementById('mc-batch-btn');
+  var createPkg = document.getElementById('mc-pkg-check').checked;
+  var pkgName = createPkg ? document.getElementById('mc-pkg-name').value.trim() : '';
+  if (createPkg && !pkgName) { document.getElementById('mc-pkg-name').focus(); showToast('Donnez un nom au package'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Collecte en cours…';
+
+  var area = document.getElementById('mc-batch-area');
+  area.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:16px;background:var(--surface2);border-radius:8px;"><div class="spinner"></div><span style="font-size:12px;color:var(--muted);">Envoi du fichier et analyse IA…</span></div>';
+
+  var fd = new FormData();
+  fd.append('file', mc_excel_file);
+  if (createPkg) { fd.append('create_package', 'true'); fd.append('package_name', pkgName); }
+
+  try {
+    var res = await fetch(API + '/api/collect-batch', { method: 'POST', body: fd });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    var results = data.results || [];
+    var saved = results.filter(function(r){ return r.status === 'saved'; }).length;
+    var dupes = results.filter(function(r){ return r.status === 'duplicate'; }).length;
+    var errors = results.filter(function(r){ return r.status === 'error'; }).length;
+
+    var html = '<div style="margin-bottom:12px;padding:10px 14px;background:rgba(30,143,84,0.08);border-radius:8px;border:1px solid rgba(30,143,84,0.2);">';
+    html += '<span style="font-size:12px;font-weight:700;color:#1a7a3e;">✓ ' + saved + ' sauvegardé(s)</span>';
+    if (dupes) html += ' · <span style="font-size:11px;color:var(--muted);">' + dupes + ' doublon(s)</span>';
+    if (errors) html += ' · <span style="font-size:11px;color:#c8392b;">' + errors + ' erreur(s)</span>';
+    html += '</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    results.forEach(function(r) {
+      var icon = r.status === 'saved' ? '✅' : r.status === 'duplicate' ? '⚠️' : '❌';
+      var label = r.titre || r.url;
+      var sub = r.status === 'error' ? (r.error || 'Erreur inconnue') : r.status === 'duplicate' ? 'Déjà dans la base' : 'Ajouté';
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border-radius:6px;font-size:11px;">';
+      html += '<span>' + icon + '</span>';
+      html += '<div style="flex:1;overflow:hidden;"><div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + label + '</div>';
+      html += '<div style="color:var(--muted);">' + sub + '</div></div></div>';
+    });
+    html += '</div>';
+    if (data.package_id) {
+      html += '<div style="margin-top:12px;padding:10px 14px;background:var(--lime-bg);border-radius:8px;border:1px solid rgba(200,232,78,0.35);font-size:11px;color:var(--accent);font-weight:600;">📦 Package &laquo;' + (data.package_name || '') + '&raquo; créé avec ' + saved + ' dispositif(s)</div>';
+      loadPackages();
+    }
+    area.innerHTML = html;
+    loadDispositifs();
+    btn.textContent = 'Terminer';
+    btn.onclick = closeManualCollect;
+    btn.disabled = false;
+  } catch(e) {
+    area.innerHTML = '<div style="padding:14px;background:rgba(200,57,43,0.07);border:1px solid rgba(200,57,43,0.2);border-radius:8px;color:#a0291e;font-size:12px;">Erreur : ' + e.message + '</div>';
+    btn.disabled = false;
+    btn.textContent = 'Réessayer';
+  }
+}
+
+// ── PACKAGES ──────────────────────────────────────────────────────────
+var currentPkgId = null;
+
+async function loadPackages() {
+  var list = document.getElementById('pkg-list');
+  try {
+    var res = await fetch(API + '/api/packages');
+    var pkgs = await res.json();
+    document.getElementById('pkg-list-count').textContent = pkgs.length + ' package' + (pkgs.length > 1 ? 's' : '');
+    if (!pkgs.length) {
+      list.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:48px 24px;color:var(--muted);">' +
+        '<div style="font-size:32px;margin-bottom:10px;">&#x1F4E6;</div>' +
+        '<div style="font-size:13px;font-weight:700;margin-bottom:6px;">Aucun package</div>' +
+        '<div style="font-size:12px;">Importez un fichier Excel et cochez Regrouper dans un Package</div></div>';
+      return;
+    }
+    var html = '';
+    pkgs.forEach(function(p) {
+      var d = p.created_at ? new Date(p.created_at).toLocaleDateString('fr-FR') : '';
+      html += '<div data-pkgid="' + p.id + '" data-pkgname="' + p.name.replace(/"/g,'&quot;') + '" class="pkg-card">';
+      html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">';
+      html += '<div style="width:38px;height:38px;background:var(--lime-bg);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;">&#x1F4E6;</div>';
+      html += '<button class="pkg-del-btn" data-pid="' + p.id + '" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:4px 6px;border-radius:5px;">&#x2715;</button>';
+      html += '</div>';
+      html += '<div style="font-weight:800;font-size:14px;color:var(--accent);margin-bottom:5px;">' + p.name + '</div>';
+      html += '<div style="font-size:11px;color:var(--muted);">' + p.nb + ' dispositif' + (p.nb > 1 ? 's' : '') + ' &middot; ' + d + '</div>';
+      html += '</div>';
+    });
+    list.innerHTML = html;
+    list.querySelectorAll('.pkg-card').forEach(function(card) {
+      card.style.cssText = 'background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:18px 20px;cursor:pointer;transition:all 0.18s;';
+      card.addEventListener('mouseenter', function(){ this.style.borderColor='var(--accent)'; this.style.transform='translateY(-2px)'; });
+      card.addEventListener('mouseleave', function(){ this.style.borderColor='var(--border)'; this.style.transform=''; });
+      card.addEventListener('click', function(e) {
+        if (e.target.classList.contains('pkg-del-btn')) return;
+        openPkgDetail(parseInt(this.dataset.pkgid), this.dataset.pkgname);
+      });
+    });
+    list.querySelectorAll('.pkg-del-btn').forEach(function(btn) {
+      btn.addEventListener('mouseenter', function(){ this.style.color='#c8392b'; });
+      btn.addEventListener('mouseleave', function(){ this.style.color='var(--muted)'; });
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        deletePackage(parseInt(this.dataset.pid), this);
+      });
+    });
+  } catch(e) {
+    list.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:#c8392b;font-size:12px;">Erreur chargement</div>';
+  }
+}
+
+async function openPkgDetail(id, name) {
+  currentPkgId = id;
+  document.getElementById('pkg-list').style.display = 'none';
+  var detail = document.getElementById('pkg-detail');
+  detail.style.display = 'flex';
+  document.getElementById('pkg-detail-name').textContent = name;
+  document.getElementById('pkg-detail-count').textContent = '';
+  document.getElementById('pkg-detail-grid').innerHTML = '<div class="spinner" style="margin:32px auto;display:block;"></div>';
+  try {
+    var res = await fetch(API + '/api/packages/' + id + '/dispositifs');
+    var disps = await res.json();
+    document.getElementById('pkg-detail-count').textContent = disps.length + ' dispositif' + (disps.length > 1 ? 's' : '');
+    if (!disps.length) {
+      document.getElementById('pkg-detail-grid').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:32px;">Aucun dispositif dans ce package</div>';
+      return;
+    }
+    var html = '';
+    disps.forEach(function(d) {
+      html += '<div style="background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;">';
+      html += '<div style="font-weight:800;font-size:12px;color:var(--accent);margin-bottom:6px;line-height:1.3;">' + (d.titre || 'Sans titre') + '</div>';
+      html += '<div style="font-size:10.5px;color:var(--muted);margin-bottom:4px;">' + (d.guichet_financeur || '') + '</div>';
+      html += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;">';
+      if (d.nature) html += '<span style="background:var(--lime-bg);color:#3a5a1e;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:100px;">' + d.nature + '</span>';
+      if (d.territoire) html += '<span style="background:var(--surface2);color:var(--muted);font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:100px;">' + d.territoire + '</span>';
+      html += '</div>';
+      if (d.source_url) html += '<a href="' + d.source_url + '" target="_blank" style="display:block;margin-top:8px;font-size:10px;color:var(--accent);opacity:0.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + d.source_url + '</a>';
+      html += '</div>';
+    });
+    document.getElementById('pkg-detail-grid').innerHTML = html;
+  } catch(e) {
+    document.getElementById('pkg-detail-grid').innerHTML = '<div style="color:#c8392b;font-size:12px;">Erreur</div>';
+  }
+}
+
+function closePkgDetail() {
+  document.getElementById('pkg-detail').style.display = 'none';
+  document.getElementById('pkg-list').style.display = 'grid';
+  currentPkgId = null;
+}
+
+function exportPackagePptx() {
+  if (!currentPkgId) return;
+  window.open(API + '/api/packages/' + currentPkgId + '/export-pptx', '_blank');
+}
+
+async function deletePackage(id, btn) {
+  if (!confirm('Supprimer ce package ? Les dispositifs restent dans la base.')) return;
+  btn.disabled = true;
+  try {
+    await fetch(API + '/api/packages/' + id, { method: 'DELETE' });
+    loadPackages();
+  } catch(e) { showToast('Erreur'); }
+}
+
 // ── COLLECT ALL MISSING ───────────────────────────────────────────────
 function toggleCollectMenu() {
   const menu = document.getElementById('collect-submenu');
@@ -3909,9 +3463,11 @@ function switchTab(tab, btn) {
   document.querySelectorAll('.header-tab').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-' + tab).classList.add('active');
+  var panel = document.getElementById('panel-' + tab);
+  if (panel) panel.classList.add('active');
   if (tab === 'veille360') loadV360Sessions();
   if (tab === 'dispositifs') loadDispositifs();
+  if (tab === 'packages') loadPackages();
 }
 
 // ── ESPACE PROJET ────────────────────────────────────────────────────
@@ -4209,7 +3765,11 @@ function autoSaveNotes() {
   }, 1500);
 }
 
->
+
+init();
+</script>
+</body>
+</html>
 """
 
 
@@ -8765,10 +8325,343 @@ def api_reorder_sources():
 def consultant():
     return CONSULTANT_PAGE, 200, {"Content-Type": "text/html; charset=utf-8"}
 
+
+LANDING_PAGE = """<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubstanCiel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --accent:  #1a3c2e;
+  --accent2: #1f4a38;
+  --accent3: #2a5c46;
+  --lime:    #c8e84e;
+  --lime2:   #b0d035;
+  --lime-bg: rgba(200,232,78,0.10);
+  --bg:      #f2f4f0;
+  --surface: #ffffff;
+  --text:    #111a14;
+  --text2:   #3a4a3e;
+  --muted:   #7a8e80;
+  --border:  #e0e5d8;
+  --shadow:  0 2px 8px rgba(26,60,46,0.08);
+  --shadow-md: 0 6px 24px rgba(26,60,46,0.11);
+  --shadow-lg: 0 16px 48px rgba(26,60,46,0.15);
+}
+
+html, body {
+  height: 100%;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: var(--accent);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ── PAGE ── */
+.page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── NOISE TEXTURE ── */
+.page::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 0;
+}
+
+/* ── GLOW BLOBS ── */
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 0;
+}
+.blob-1 { width: 600px; height: 600px; background: var(--lime); top: -200px; left: 50%; transform: translateX(-50%); animation: float 14s ease-in-out infinite alternate; }
+.blob-2 { width: 300px; height: 300px; background: #5adf7a; bottom: 0; left: -60px; animation: float 10s ease-in-out infinite alternate-reverse; }
+.blob-3 { width: 200px; height: 200px; background: var(--lime2); bottom: 80px; right: 60px; animation: float 8s ease-in-out infinite alternate; }
+
+@keyframes float { 0% { transform: translateY(0) scale(1); } 100% { transform: translateY(20px) scale(1.05); } }
+.blob-1 { animation: floatCenter 14s ease-in-out infinite alternate; }
+@keyframes floatCenter { 0% { transform: translateX(-50%) translateY(0); } 100% { transform: translateX(-50%) translateY(24px); } }
+
+/* ── HEADER ── */
+header {
+  position: relative; z-index: 10;
+  display: flex; align-items: center;
+  padding: 24px 48px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.logo {
+  display: flex; align-items: center; gap: 10px;
+}
+.logo-mark {
+  width: 34px; height: 34px;
+  background: var(--lime);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.logo-mark svg { width: 17px; height: 17px; }
+.logo-name {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800; font-size: 17px;
+  color: #fff; letter-spacing: -0.3px;
+}
+.logo-name span { color: var(--lime); }
+
+.header-pill {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10.5px; font-weight: 600;
+  color: rgba(200,232,78,0.65);
+  letter-spacing: 0.09em; text-transform: uppercase;
+  border: 1px solid rgba(200,232,78,0.15);
+  padding: 5px 12px; border-radius: 100px;
+}
+.pulse {
+  width: 6px; height: 6px;
+  background: var(--lime2); border-radius: 50%;
+  animation: pulse 2.2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.7)} }
+
+/* ── HERO ── */
+.hero {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  padding: 0 24px 24px;
+  position: relative; z-index: 10;
+  gap: 0;
+}
+
+.hero-eyebrow {
+  font-size: 11px; font-weight: 600;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(42px, 5.5vw, 68px);
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.0;
+  letter-spacing: -2px;
+  margin-bottom: 20px;
+}
+h1 .lime { color: var(--lime); }
+h1 .dim  { color: rgba(255,255,255,0.25); font-weight: 700; }
+
+.hero-desc {
+  font-size: 15px; font-weight: 300;
+  color: rgba(255,255,255,0.4);
+  line-height: 1.65;
+  max-width: 420px;
+  margin-bottom: 44px;
+}
+
+/* ── CARDS ── */
+.cards {
+  display: flex; gap: 14px;
+  width: 100%; max-width: 640px;
+}
+
+.card {
+  flex: 1;
+  text-decoration: none;
+  border-radius: 18px;
+  padding: 24px 26px;
+  display: flex; flex-direction: column;
+  transition: transform 0.22s cubic-bezier(0.16,1,0.3,1), box-shadow 0.22s;
+  position: relative; overflow: hidden;
+}
+.card:hover { transform: translateY(-4px); }
+
+.card-primary {
+  background: var(--lime);
+}
+.card-primary:hover {
+  box-shadow: 0 18px 48px rgba(200,232,78,0.25);
+}
+
+.card-secondary {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  backdrop-filter: blur(12px);
+}
+.card-secondary:hover {
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.18);
+  box-shadow: 0 18px 48px rgba(0,0,0,0.2);
+}
+
+.card-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.card-icon {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px;
+}
+.card-primary .card-icon { background: rgba(26,60,46,0.12); }
+.card-secondary .card-icon { background: rgba(255,255,255,0.08); }
+
+.card-arrow {
+  font-size: 20px;
+  transition: transform 0.2s;
+}
+.card-primary .card-arrow { color: var(--accent); }
+.card-secondary .card-arrow { color: rgba(255,255,255,0.4); }
+.card:hover .card-arrow { transform: translate(3px,-3px); }
+
+.card-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px; font-weight: 800;
+  letter-spacing: -0.3px;
+  margin-bottom: 6px;
+}
+.card-primary .card-title { color: var(--accent); }
+.card-secondary .card-title { color: #fff; }
+
+.card-desc {
+  font-size: 12px; line-height: 1.55;
+}
+.card-primary .card-desc { color: rgba(26,60,46,0.6); }
+.card-secondary .card-desc { color: rgba(255,255,255,0.38); }
+
+.card-tags {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  margin-top: 16px;
+}
+.tag {
+  font-size: 9.5px; font-weight: 700;
+  padding: 3px 8px; border-radius: 100px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.card-primary .tag { background: rgba(26,60,46,0.1); color: var(--accent); }
+.card-secondary .tag { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.45); border: 1px solid rgba(255,255,255,0.08); }
+
+/* ── FOOTER ── */
+footer {
+  position: relative; z-index: 10;
+  text-align: center;
+  padding: 16px;
+  font-size: 10.5px; color: rgba(255,255,255,0.18);
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 600px) {
+  header { padding: 18px 24px; }
+  h1 { font-size: 36px; letter-spacing: -1px; }
+  .cards { flex-direction: column; max-width: 380px; }
+  html, body { overflow: auto; }
+  .page { height: auto; min-height: 100vh; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L3 7v5c0 4.97 3.8 9.63 9 10.93C17.2 21.63 21 16.97 21 12V7L12 2z" fill="#1a3c2e"/>
+          <path d="M8.5 12l2.5 2.5 4.5-5" stroke="#c8e84e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="logo-name">Substan<span>Ciel</span></div>
+    </div>
+    <div class="header-pill">
+      <span class="pulse"></span>
+      Veille active
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <div class="hero">
+    <p class="hero-eyebrow">Financement public · Intelligence artificielle</p>
+
+    <h1>
+      Les bons financements<br>
+      <span class="lime">au bon moment</span><br>
+      <span class="dim">pour vos clients</span>
+    </h1>
+
+    <p class="hero-desc">
+      Agrégation de subventions et appels à projets nationaux et régionaux — qualifiés et structurés par IA pour les consultants en financement.
+    </p>
+
+    <!-- CARTES -->
+    <div class="cards">
+
+      <a href="/app" class="card card-primary">
+        <div class="card-header">
+          <div class="card-icon">🔭</div>
+          <span class="card-arrow">↗</span>
+        </div>
+        <div class="card-title">Espace Veille</div>
+        <div class="card-desc">Parcourez, filtrez et qualifiez les dispositifs de financement en temps réel.</div>
+        <div class="card-tags">
+          <span class="tag">Curation IA</span>
+          <span class="tag">70+ sources</span>
+          <span class="tag">Multi-régions</span>
+        </div>
+      </a>
+
+      <a href="/consultant" class="card card-secondary">
+        <div class="card-header">
+          <div class="card-icon">📋</div>
+          <span class="card-arrow">↗</span>
+        </div>
+        <div class="card-title">Espace Collecte</div>
+        <div class="card-desc">Collectez et exportez les fiches. Pré-veille 360° et journal par client.</div>
+        <div class="card-tags">
+          <span class="tag">Pré-veille 360°</span>
+          <span class="tag">Export PPTX</span>
+          <span class="tag">Journal</span>
+        </div>
+      </a>
+
+    </div>
+  </div>
+
+  <footer>SubstanCiel · Outil interne de veille subventions</footer>
+
+</div>
+</body>
+</html>
+"""
+
+
 @app.route('/')
 def index():
-    from flask import redirect
-    return redirect('/app')
+    return LANDING_PAGE, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 @app.route('/app')
 def app_page():
@@ -8964,10 +8857,7 @@ def autotag_status():
 @app.route('/api/collect', methods=['POST'])
 def collect_dispositif():
     """Fetch a URL, send to Claude, return structured grid."""
-    try:
-        data = request.get_json(force=True, silent=True) or {}
-    except Exception:
-        data = {}
+    data = request.get_json()
     url = data.get('url','')
     title = data.get('title','')
     article_id = data.get('id')
@@ -9001,30 +8891,13 @@ def collect_dispositif():
     if pdf_url and pdf_url.lower().split('?')[0].endswith(('.pdf','.doc','.docx')):
         try:
             req_cdc = Request(pdf_url, headers={'User-Agent':'Mozilla/5.0'})
-            with urlopen(req_cdc, timeout=8) as resp_cdc:
+            with urlopen(req_cdc, timeout=12) as resp_cdc:
                 raw_cdc = resp_cdc.read(150000)
-            # Extraction texte sans dépendance externe
             try:
-                import re as _re
-                # Tenter extraction texte brut depuis PDF (chercher les streams texte)
-                raw_str = raw_cdc.decode('latin-1', errors='ignore')
-                # Extraire les blocs texte PDF (entre BT...ET)
-                bt_blocks = _re.findall(r'BT.*?ET', raw_str, _re.DOTALL)
-                if bt_blocks:
-                    tj_texts = []
-                    for block in bt_blocks:
-                        for m in _re.finditer(r'\(([^)]{2,200})\)\s*Tj', block):
-                            tj_texts.append(m.group(1))
-                    extracted = ' '.join(tj_texts)
-                    if len(extracted) > 200:
-                        page_text = extracted[:6000]
-                        source_used = 'cdc_pdf'
-                        raise StopIteration  # sortir proprement
-                # Fallback : texte brut décodé
-                page_text = raw_cdc.decode('utf-8', errors='ignore')[:6000]
-                source_used = 'cdc_raw'
-            except StopIteration:
-                pass
+                from io import BytesIO
+                from pdfminer.high_level import extract_text as pdf_extract
+                page_text = pdf_extract(BytesIO(raw_cdc))[:6000]
+                source_used = 'cdc_pdf'
             except Exception:
                 page_text = raw_cdc.decode('utf-8', errors='ignore')[:6000]
                 source_used = 'cdc_raw'
@@ -9038,7 +8911,7 @@ def collect_dispositif():
                 'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
                 'Accept-Language':'fr-FR,fr;q=0.9',
             })
-            with urlopen(req_html, timeout=8) as resp_html:
+            with urlopen(req_html, timeout=10) as resp_html:
                 raw_html = resp_html.read(200000).decode('utf-8', errors='ignore')
 
             # Supprimer scripts, styles, nav, footer (bruit)
@@ -9081,7 +8954,7 @@ def collect_dispositif():
             "x-api-key":ANTHROPIC_API_KEY,
             "anthropic-version":"2023-06-01"
         }, method="POST")
-        with urlopen(req, timeout=20) as resp:
+        with urlopen(req, timeout=25) as resp:
             claude_data = json.loads(resp.read())
         text = claude_data["content"][0]["text"].strip()
         m = re.search(r'\{[\s\S]*\}', text)
@@ -9095,6 +8968,262 @@ def collect_dispositif():
         log.error(f"Collect Claude error: {e}")
         return jsonify({'error': str(e)}),500
 
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PACKAGES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/packages', methods=['GET'])
+def get_packages():
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("""
+        SELECT p.id, p.name, p.created_at,
+               COUNT(d.id) as nb
+        FROM packages p
+        LEFT JOIN dispositifs d ON d.package_id = p.id
+        GROUP BY p.id ORDER BY p.created_at DESC
+    """)
+    rows = cur.fetchall(); cur.close(); conn.close()
+    result = []
+    for r in rows:
+        result.append({'id': r['id'], 'name': r['name'],
+                       'created_at': r['created_at'].isoformat() if r['created_at'] else '',
+                       'nb': r['nb']})
+    return jsonify(result)
+
+@app.route('/api/packages', methods=['POST'])
+def create_package():
+    data = request.get_json()
+    name = data.get('name','').strip()
+    if not name:
+        return jsonify({'error': 'Nom requis'}), 400
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("INSERT INTO packages (name) VALUES (%s) RETURNING id", (name,))
+    pkg_id = cur.fetchone()['id']
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'id': pkg_id, 'name': name})
+
+@app.route('/api/packages/<int:pid>', methods=['DELETE'])
+def delete_package(pid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("DELETE FROM packages WHERE id=%s", (pid,))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'status': 'deleted'})
+
+@app.route('/api/packages/<int:pid>/dispositifs', methods=['GET'])
+def get_package_dispositifs(pid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT * FROM dispositifs WHERE package_id=%s ORDER BY collected_at DESC", (pid,))
+    rows = cur.fetchall(); cur.close(); conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        if d.get('collected_at'): d['collected_at'] = d['collected_at'].isoformat()
+        result.append(d)
+    return jsonify(result)
+
+@app.route('/api/packages/<int:pid>/export-pptx', methods=['GET'])
+def export_package_pptx(pid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT name FROM packages WHERE id=%s", (pid,))
+    pkg = cur.fetchone()
+    if not pkg:
+        return jsonify({'error': 'Package introuvable'}), 404
+    cur.execute("SELECT * FROM dispositifs WHERE package_id=%s ORDER BY collected_at DESC", (pid,))
+    rows = cur.fetchall(); cur.close(); conn.close()
+    if not rows:
+        return jsonify({'error': 'Package vide'}), 400
+
+    from pptx import Presentation
+    from pptx.util import Inches, Pt, Emu
+    from pptx.dml.color import RGBColor
+    import io, base64 as b64mod
+
+    # Combine all dispositifs into one PPTX
+    combined_prs = None
+    for r in rows:
+        data = dict(r)
+        if data.get('collected_at'): data['collected_at'] = data['collected_at'].isoformat()
+        try:
+            pptx_b64 = generate_dispositif_pptx(data)
+            pptx_bytes = b64mod.b64decode(pptx_b64)
+            prs = Presentation(io.BytesIO(pptx_bytes))
+            if combined_prs is None:
+                combined_prs = prs
+            else:
+                for slide in prs.slides:
+                    template = combined_prs.slide_layouts[5]
+                    new_slide = combined_prs.slides.add_slide(template)
+                    for shape in slide.shapes:
+                        try:
+                            el = shape.element
+                            new_slide.shapes._spTree.insert(2, el)
+                        except Exception:
+                            pass
+        except Exception as e:
+            log.warning(f"Package PPTX slide error: {e}")
+            continue
+
+    if not combined_prs:
+        return jsonify({'error': 'Aucune slide generee'}), 500
+
+    buf = io.BytesIO()
+    combined_prs.save(buf)
+    buf.seek(0)
+    from flask import send_file
+    safe_name = pkg['name'].replace(' ', '_').replace('/', '-')[:40]
+    return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                     as_attachment=True, download_name=f"Package_{safe_name}.pptx")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BATCH COLLECT (Excel upload)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/collect-batch', methods=['POST'])
+def collect_batch():
+    """Read URLs from uploaded Excel (col A, sheet 1), collect each one, save to DB."""
+    try:
+        import openpyxl
+    except ImportError:
+        return jsonify({'error': 'openpyxl non installe'}), 500
+
+    file = request.files.get('file')
+    if not file:
+        return jsonify({'error': 'Fichier manquant'}), 400
+
+    package_name = request.form.get('package_name', '').strip()
+    create_pkg = request.form.get('create_package', 'false') == 'true' and bool(package_name)
+
+    # Read URLs from Excel
+    try:
+        import io as _io
+        wb = openpyxl.load_workbook(_io.BytesIO(file.read()), read_only=True, data_only=True)
+        ws = wb.worksheets[0]
+        urls = []
+        for row in ws.iter_rows(min_row=1, max_row=21, min_col=1, max_col=1, values_only=True):
+            val = row[0]
+            if val and isinstance(val, str) and val.strip().startswith('http'):
+                urls.append(val.strip())
+        wb.close()
+    except Exception as e:
+        return jsonify({'error': f'Lecture Excel impossible : {e}'}), 400
+
+    if not urls:
+        return jsonify({'error': 'Aucune URL trouvee en colonne A'}), 400
+
+    urls = urls[:20]  # Hard limit
+
+    # Create package if requested
+    pkg_id = None
+    if create_pkg:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("INSERT INTO packages (name) VALUES (%s) RETURNING id", (package_name,))
+        pkg_id = cur.fetchone()['id']
+        conn.commit(); cur.close(); conn.close()
+
+    # Process each URL
+    results = []
+    fields = ['guichet_financeur','guichet_instructeur','titre','nature','beneficiaire',
+              'type_depot','date_fermeture','objectif','types_depenses','operations_eligibles',
+              'depenses_eligibles','criteres_eligibilite','depenses_ineligibles','montants_taux',
+              'thematiques','territoire','points_vigilance','contact','programme_europeen','source_url']
+
+    for idx, url in enumerate(urls):
+        result = {'url': url, 'index': idx, 'status': 'error', 'titre': '', 'error': ''}
+        try:
+            # Reuse collect logic inline
+            page_text = ''
+            pdf_url = None
+            source_used = 'page'
+
+            try:
+                pdf_url = _scrape_pdf_url(url)
+            except Exception:
+                pass
+
+            if pdf_url and pdf_url.lower().split('?')[0].endswith(('.pdf','.doc','.docx')):
+                try:
+                    req_cdc = Request(pdf_url, headers={'User-Agent':'Mozilla/5.0'})
+                    with urlopen(req_cdc, timeout=12) as resp_cdc:
+                        raw_cdc = resp_cdc.read(150000)
+                    try:
+                        from io import BytesIO
+                        from pdfminer.high_level import extract_text as pdf_extract
+                        page_text = pdf_extract(BytesIO(raw_cdc))[:6000]
+                        source_used = 'cdc_pdf'
+                    except Exception:
+                        page_text = raw_cdc.decode('utf-8', errors='ignore')[:6000]
+                        source_used = 'cdc_raw'
+                except Exception as e:
+                    log.warning(f"Batch CDC error {pdf_url}: {e}")
+
+            if not page_text:
+                try:
+                    req_html = Request(url, headers={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+                    with urlopen(req_html, timeout=10) as resp_html:
+                        raw_html = resp_html.read(200000).decode('utf-8', errors='ignore')
+                    NOISE_PAT = re.compile('<(script|style|nav|header|footer|aside)[^>]*>.*?</(script|style|nav|header|footer|aside)>', re.IGNORECASE|re.DOTALL)
+                    clean = NOISE_PAT.sub(' ', raw_html)
+                    text = re.sub(r'<[^>]+>', ' ', clean)
+                    text = re.sub(r'\s+', ' ', text).strip()
+                    page_text = text[500:8500] if len(text) > 500 else text[:8000]
+                except Exception as e:
+                    page_text = f"URL: {url} (contenu non accessible)"
+
+            cdc_mention = f"\nCahier des charges : {pdf_url}" if pdf_url else ""
+            user_content = f"Analyse ce dispositif et remplis la grille.{cdc_mention}\nURL : {url}\n[Source : {source_used}]\n\nContenu :\n{page_text}"
+            payload = json.dumps({
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 2000,
+                "system": COLLECT_PROMPT,
+                "messages": [{"role":"user","content":user_content}]
+            }).encode()
+            req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={
+                "Content-Type":"application/json",
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version":"2023-06-01"
+            }, method="POST")
+            with urlopen(req, timeout=30) as resp:
+                claude_data = json.loads(resp.read())
+            text_resp = claude_data["content"][0]["text"].strip()
+            m = re.search(r'\{[\s\S]*\}', text_resp)
+            disp = json.loads(m.group() if m else text_resp)
+            disp['source_url'] = url
+            if pdf_url: disp['cdc_url'] = pdf_url
+
+            # Save to DB
+            conn = get_db(); cur = conn.cursor()
+            src_url = disp.get('source_url', '')
+            cur.execute("SELECT id FROM dispositifs WHERE source_url=%s", (src_url,))
+            existing = cur.fetchone()
+            if existing:
+                result['status'] = 'duplicate'
+                result['titre'] = disp.get('titre', url)
+            else:
+                cols = ','.join(fields)
+                placeholders = ','.join(['%s']*len(fields))
+                vals = [disp.get(f,'') for f in fields]
+                if pkg_id:
+                    cur.execute(f"INSERT INTO dispositifs ({cols}, package_id) VALUES ({placeholders}, %s) RETURNING id", vals + [pkg_id])
+                else:
+                    cur.execute(f"INSERT INTO dispositifs ({cols}) VALUES ({placeholders}) RETURNING id", vals)
+                saved_id = cur.fetchone()['id']
+                conn.commit()
+                result['status'] = 'saved'
+                result['titre'] = disp.get('titre', url)
+                result['id'] = saved_id
+            cur.close(); conn.close()
+
+        except Exception as e:
+            result['error'] = str(e)[:120]
+            log.error(f"Batch collect error {url}: {e}")
+
+        results.append(result)
+
+    return jsonify({'results': results, 'package_id': pkg_id, 'package_name': package_name})
 
 @app.route('/api/dispositifs', methods=['GET'])
 def get_dispositifs():
