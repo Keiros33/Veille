@@ -9078,35 +9078,53 @@ def export_package_pptx(pid):
     from pptx.dml.color import RGBColor
     import io, base64 as b64mod
 
-    # Combine all dispositifs into one PPTX
-    combined_prs = None
+    import copy
+
+    # Generate all individual PPTX bytes
+    all_pptx = []
     for r in rows:
         data = dict(r)
         if data.get('collected_at'): data['collected_at'] = data['collected_at'].isoformat()
         try:
-            pptx_bytes = generate_dispositif_pptx(data)  # returns raw bytes
-            prs = Presentation(io.BytesIO(pptx_bytes))
-            if combined_prs is None:
-                combined_prs = prs
-            else:
-                for slide in prs.slides:
-                    from pptx.oxml.ns import qn
-                    import copy
-                    slide_layout = combined_prs.slide_layouts[5]
-                    new_slide = combined_prs.slides.add_slide(slide_layout)
-                    # Copy all shapes from source slide
-                    sp_tree = new_slide.shapes._spTree
-                    for shape in slide.shapes:
-                        try:
-                            sp_tree.insert(2, copy.deepcopy(shape.element))
-                        except Exception:
-                            pass
+            pptx_bytes = generate_dispositif_pptx(data)
+            all_pptx.append(pptx_bytes)
         except Exception as e:
-            log.warning(f"Package PPTX slide error: {e}")
+            log.warning(f"Package PPTX generate error: {e}")
             continue
 
-    if not combined_prs:
+    if not all_pptx:
         return jsonify({'error': 'Aucune slide generee'}), 500
+
+    # Merge: use first as base, append slides from all others
+    base_prs = Presentation(io.BytesIO(all_pptx[0]))
+
+    for pptx_bytes in all_pptx[1:]:
+        try:
+            src_prs = Presentation(io.BytesIO(pptx_bytes))
+            for slide in src_prs.slides:
+                # Add blank slide to base
+                try:
+                    layout_idx = src_prs.slide_layouts.index(slide.slide_layout)
+                    layout = base_prs.slide_layouts[min(layout_idx, len(base_prs.slide_layouts)-1)]
+                except Exception:
+                    layout = base_prs.slide_layouts[5]
+
+                new_slide = base_prs.slides.add_slide(layout)
+                src_sp_tree = slide.shapes._spTree
+                dst_sp_tree = new_slide.shapes._spTree
+
+                # Remove default placeholder shapes (keep only first 2 group nodes)
+                while len(dst_sp_tree) > 2:
+                    dst_sp_tree.remove(dst_sp_tree[-1])
+
+                # Deep-copy all shape elements from source (skip first 2 group nodes)
+                for child in list(src_sp_tree)[2:]:
+                    dst_sp_tree.append(copy.deepcopy(child))
+        except Exception as e:
+            log.warning(f"Package PPTX merge error: {e}")
+            continue
+
+    combined_prs = base_prs
 
     buf = io.BytesIO()
     combined_prs.save(buf)
