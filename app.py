@@ -9079,6 +9079,50 @@ def export_package_pptx(pid):
     import io, base64 as b64mod
 
     import copy
+    from pptx.opc.constants import RELATIONSHIP_TYPE as RT
+
+    def _merge_slide_into_prs(src_slide, dst_prs):
+        """Copy a slide from src into dst_prs, including all image media."""
+        # Add blank slide
+        try:
+            layout = dst_prs.slide_layouts[5]
+        except Exception:
+            layout = dst_prs.slide_layouts[0]
+        new_slide = dst_prs.slides.add_slide(layout)
+
+        # --- Copy image relationships (media files) ---
+        # Build a mapping: old rId -> new rId in dst slide
+        rId_map = {}
+        for rel in src_slide.part.rels.values():
+            if 'image' in rel.reltype:
+                try:
+                    img_part = rel.target_part
+                    # Add the image to the new slide's part
+                    new_rId = new_slide.part.relate_to(img_part, rel.reltype)
+                    rId_map[rel.rId] = new_rId
+                except Exception as e:
+                    log.warning(f"Image rel copy error: {e}")
+
+        # --- Deep copy the spTree ---
+        src_sp_tree = src_slide.shapes._spTree
+        dst_sp_tree = new_slide.shapes._spTree
+
+        # Clear destination (keep first 2 mandatory group nodes)
+        while len(dst_sp_tree) > 2:
+            dst_sp_tree.remove(dst_sp_tree[-1])
+
+        # Copy each child element, remapping rIds for images
+        from lxml import etree
+        for child in list(src_sp_tree)[2:]:
+            el = copy.deepcopy(child)
+            # Remap any blipFill rEmbed / rLink attributes
+            for node in el.iter():
+                for attr in list(node.attrib.keys()):
+                    if attr.endswith('}embed') or attr.endswith('}link'):
+                        old_rId = node.attrib[attr]
+                        if old_rId in rId_map:
+                            node.attrib[attr] = rId_map[old_rId]
+            dst_sp_tree.append(el)
 
     # Generate all individual PPTX bytes
     all_pptx = []
@@ -9095,31 +9139,14 @@ def export_package_pptx(pid):
     if not all_pptx:
         return jsonify({'error': 'Aucune slide generee'}), 500
 
-    # Merge: use first as base, append slides from all others
+    # Use first pptx as base, merge all others into it
     base_prs = Presentation(io.BytesIO(all_pptx[0]))
 
     for pptx_bytes in all_pptx[1:]:
         try:
             src_prs = Presentation(io.BytesIO(pptx_bytes))
             for slide in src_prs.slides:
-                # Add blank slide to base
-                try:
-                    layout_idx = src_prs.slide_layouts.index(slide.slide_layout)
-                    layout = base_prs.slide_layouts[min(layout_idx, len(base_prs.slide_layouts)-1)]
-                except Exception:
-                    layout = base_prs.slide_layouts[5]
-
-                new_slide = base_prs.slides.add_slide(layout)
-                src_sp_tree = slide.shapes._spTree
-                dst_sp_tree = new_slide.shapes._spTree
-
-                # Remove default placeholder shapes (keep only first 2 group nodes)
-                while len(dst_sp_tree) > 2:
-                    dst_sp_tree.remove(dst_sp_tree[-1])
-
-                # Deep-copy all shape elements from source (skip first 2 group nodes)
-                for child in list(src_sp_tree)[2:]:
-                    dst_sp_tree.append(copy.deepcopy(child))
+                _merge_slide_into_prs(slide, base_prs)
         except Exception as e:
             log.warning(f"Package PPTX merge error: {e}")
             continue
