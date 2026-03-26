@@ -3155,6 +3155,8 @@ function togglePkgName() {
   if (checked) setTimeout(function(){ document.getElementById('mc-pkg-name').focus(); }, 80);
 }
 
+var batchPollTimer = null;
+
 async function runBatchCollect() {
   if (!mc_excel_file) { showToast('Importez un fichier Excel'); return; }
   var btn = document.getElementById('mc-batch-btn');
@@ -3163,10 +3165,9 @@ async function runBatchCollect() {
   if (createPkg && !pkgName) { document.getElementById('mc-pkg-name').focus(); showToast('Donnez un nom au package'); return; }
 
   btn.disabled = true;
-  btn.textContent = 'Collecte en cours…';
-
+  btn.textContent = 'Lancement…';
   var area = document.getElementById('mc-batch-area');
-  area.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:16px;background:var(--surface2);border-radius:8px;"><div class="spinner"></div><span style="font-size:12px;color:var(--muted);">Envoi du fichier et analyse IA…</span></div>';
+  area.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:16px;background:var(--surface2);border-radius:8px;"><div class="spinner"></div><span style="font-size:12px;color:var(--muted);">Envoi du fichier…</span></div>';
 
   var fd = new FormData();
   fd.append('file', mc_excel_file);
@@ -3177,36 +3178,72 @@ async function runBatchCollect() {
     var data = await res.json();
     if (data.error) throw new Error(data.error);
 
-    var results = data.results || [];
-    var saved = results.filter(function(r){ return r.status === 'saved'; }).length;
-    var dupes = results.filter(function(r){ return r.status === 'duplicate'; }).length;
-    var errors = results.filter(function(r){ return r.status === 'error'; }).length;
+    var jobId = data.job_id;
+    var total = data.total;
+    btn.textContent = 'En cours…';
 
-    var html = '<div style="margin-bottom:12px;padding:10px 14px;background:rgba(30,143,84,0.08);border-radius:8px;border:1px solid rgba(30,143,84,0.2);">';
-    html += '<span style="font-size:12px;font-weight:700;color:#1a7a3e;">✓ ' + saved + ' sauvegardé(s)</span>';
-    if (dupes) html += ' · <span style="font-size:11px;color:var(--muted);">' + dupes + ' doublon(s)</span>';
-    if (errors) html += ' · <span style="font-size:11px;color:#c8392b;">' + errors + ' erreur(s)</span>';
-    html += '</div>';
-    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
-    results.forEach(function(r) {
-      var icon = r.status === 'saved' ? '✅' : r.status === 'duplicate' ? '⚠️' : '❌';
-      var label = r.titre || r.url;
-      var sub = r.status === 'error' ? (r.error || 'Erreur inconnue') : r.status === 'duplicate' ? 'Déjà dans la base' : 'Ajouté';
-      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border-radius:6px;font-size:11px;">';
-      html += '<span>' + icon + '</span>';
-      html += '<div style="flex:1;overflow:hidden;"><div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + label + '</div>';
-      html += '<div style="color:var(--muted);">' + sub + '</div></div></div>';
-    });
-    html += '</div>';
-    if (data.package_id) {
-      html += '<div style="margin-top:12px;padding:10px 14px;background:var(--lime-bg);border-radius:8px;border:1px solid rgba(200,232,78,0.35);font-size:11px;color:var(--accent);font-weight:600;">📦 Package &laquo;' + (data.package_name || '') + '&raquo; créé avec ' + saved + ' dispositif(s)</div>';
-      loadPackages();
-    }
-    area.innerHTML = html;
-    loadDispositifs();
-    btn.textContent = 'Terminer';
-    btn.onclick = closeManualCollect;
-    btn.disabled = false;
+    // Start polling
+    batchPollTimer = setInterval(async function() {
+      try {
+        var pr = await fetch(API + '/api/collect-batch/' + jobId);
+        var job = await pr.json();
+        var done = job.done || 0;
+        var results = job.results || [];
+
+        // Progress bar
+        var pct = total > 0 ? Math.round(done / total * 100) : 0;
+        var lastResult = results.length ? results[results.length - 1] : null;
+        var lastTitle = lastResult ? (lastResult.titre || lastResult.url).substring(0, 55) : '';
+        var statusIcon = lastResult ? (lastResult.status === 'saved' ? '✅' : lastResult.status === 'duplicate' ? '⚠️' : '❌') : '';
+
+        var progressHtml = '<div style="margin-bottom:12px;">';
+        progressHtml += '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:6px;">';
+        progressHtml += '<span>' + done + ' / ' + total + ' analysés</span><span>' + pct + '%</span></div>';
+        progressHtml += '<div style="background:var(--border);border-radius:100px;height:6px;">';
+        progressHtml += '<div style="background:var(--accent);height:6px;border-radius:100px;width:' + pct + '%;transition:width 0.3s;"></div></div>';
+        if (lastTitle) progressHtml += '<div style="margin-top:8px;font-size:11px;color:var(--muted);">' + statusIcon + ' ' + lastTitle + '</div>';
+        progressHtml += '</div>';
+
+        // Results list (last 5)
+        if (results.length) {
+          progressHtml += '<div style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;">';
+          results.slice().reverse().slice(0, 8).forEach(function(r) {
+            var icon = r.status === 'saved' ? '✅' : r.status === 'duplicate' ? '⚠️' : '❌';
+            var label = (r.titre || r.url).substring(0, 60);
+            var sub = r.status === 'saved' ? 'Ajouté' : r.status === 'duplicate' ? 'Doublon' : (r.error || 'Erreur').substring(0, 50);
+            progressHtml += '<div style="display:flex;gap:8px;padding:6px 8px;background:var(--surface2);border-radius:5px;font-size:10.5px;">';
+            progressHtml += '<span style="flex-shrink:0;">' + icon + '</span>';
+            progressHtml += '<div style="flex:1;overflow:hidden;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + label + '</div>';
+            progressHtml += '<div style="color:var(--muted);">' + sub + '</div></div></div>';
+          });
+          progressHtml += '</div>';
+        }
+
+        area.innerHTML = progressHtml;
+
+        if (job.status === 'done') {
+          clearInterval(batchPollTimer);
+          var saved = results.filter(function(r){ return r.status === 'saved'; }).length;
+          var dupes = results.filter(function(r){ return r.status === 'duplicate'; }).length;
+          var errors = results.filter(function(r){ return r.status === 'error'; }).length;
+          var summary = '<div style="padding:10px 14px;background:rgba(30,143,84,0.08);border-radius:8px;border:1px solid rgba(30,143,84,0.2);margin-bottom:10px;">';
+          summary += '<span style="font-size:12px;font-weight:700;color:#1a7a3e;">Terminé — ' + saved + ' sauvegardé(s)</span>';
+          if (dupes) summary += ' · <span style="font-size:11px;color:var(--muted);">' + dupes + ' doublon(s)</span>';
+          if (errors) summary += ' · <span style="font-size:11px;color:#c8392b;">' + errors + ' erreur(s)</span>';
+          summary += '</div>';
+          if (job.pkg_id) {
+            summary += '<div style="padding:9px 14px;background:var(--lime-bg);border-radius:8px;border:1px solid rgba(200,232,78,0.35);font-size:11px;color:var(--accent);font-weight:600;margin-bottom:10px;">&#x1F4E6; Package &laquo;' + (job.pkg_name || '') + '&raquo; : ' + saved + ' dispositif(s)</div>';
+            loadPackages();
+          }
+          area.innerHTML = summary + area.innerHTML;
+          loadDispositifs();
+          btn.textContent = 'Fermer';
+          btn.disabled = false;
+          btn.onclick = closeManualCollect;
+        }
+      } catch(e) { /* polling error, continue */ }
+    }, 3000);  // Poll every 3 seconds
+
   } catch(e) {
     area.innerHTML = '<div style="padding:14px;background:rgba(200,57,43,0.07);border:1px solid rgba(200,57,43,0.2);border-radius:8px;color:#a0291e;font-size:12px;">Erreur : ' + e.message + '</div>';
     btn.disabled = false;
@@ -9082,9 +9119,13 @@ def export_package_pptx(pid):
 # BATCH COLLECT (Excel upload)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
+# ── Batch collect state ───────────────────────────────────────────────────────
+_batch_jobs = {}  # job_id -> {status, results, total, done, pkg_id, pkg_name}
+
 @app.route('/api/collect-batch', methods=['POST'])
 def collect_batch():
-    """Read URLs from uploaded Excel (col A, sheet 1), collect each one, save to DB."""
+    """Start async batch collect. Returns job_id immediately."""
     try:
         import openpyxl
     except ImportError:
@@ -9097,7 +9138,6 @@ def collect_batch():
     package_name = request.form.get('package_name', '').strip()
     create_pkg = request.form.get('create_package', 'false') == 'true' and bool(package_name)
 
-    # Read URLs from Excel
     try:
         import io as _io
         wb = openpyxl.load_workbook(_io.BytesIO(file.read()), read_only=True, data_only=True)
@@ -9113,8 +9153,7 @@ def collect_batch():
 
     if not urls:
         return jsonify({'error': 'Aucune URL trouvee en colonne A'}), 400
-
-    urls = urls[:20]  # Hard limit
+    urls = urls[:20]
 
     # Create package if requested
     pkg_id = None
@@ -9124,106 +9163,113 @@ def collect_batch():
         pkg_id = cur.fetchone()['id']
         conn.commit(); cur.close(); conn.close()
 
-    # Process each URL
-    results = []
-    fields = ['guichet_financeur','guichet_instructeur','titre','nature','beneficiaire',
-              'type_depot','date_fermeture','objectif','types_depenses','operations_eligibles',
-              'depenses_eligibles','criteres_eligibilite','depenses_ineligibles','montants_taux',
-              'thematiques','territoire','points_vigilance','contact','programme_europeen','source_url']
+    import uuid
+    job_id = str(uuid.uuid4())[:8]
+    _batch_jobs[job_id] = {
+        'status': 'running', 'results': [], 'total': len(urls),
+        'done': 0, 'pkg_id': pkg_id, 'pkg_name': package_name
+    }
 
-    for idx, url in enumerate(urls):
-        result = {'url': url, 'index': idx, 'status': 'error', 'titre': '', 'error': ''}
-        try:
-            # Reuse collect logic inline
-            page_text = ''
-            pdf_url = None
-            source_used = 'page'
-
+    # Run in background thread
+    def run_job():
+        fields = ['guichet_financeur','guichet_instructeur','titre','nature','beneficiaire',
+                  'type_depot','date_fermeture','objectif','types_depenses','operations_eligibles',
+                  'depenses_eligibles','criteres_eligibilite','depenses_ineligibles','montants_taux',
+                  'thematiques','territoire','points_vigilance','contact','programme_europeen','source_url']
+        for idx, url in enumerate(urls):
+            result = {'url': url, 'index': idx, 'status': 'error', 'titre': '', 'error': ''}
             try:
-                pdf_url = _scrape_pdf_url(url)
-            except Exception:
-                pass
-
-            if pdf_url and pdf_url.lower().split('?')[0].endswith(('.pdf','.doc','.docx')):
+                page_text = ''
+                pdf_url = None
+                source_used = 'page'
                 try:
-                    req_cdc = Request(pdf_url, headers={'User-Agent':'Mozilla/5.0'})
-                    with urlopen(req_cdc, timeout=12) as resp_cdc:
-                        raw_cdc = resp_cdc.read(150000)
+                    pdf_url = _scrape_pdf_url(url)
+                except Exception:
+                    pass
+                if pdf_url and pdf_url.lower().split('?')[0].endswith(('.pdf','.doc','.docx')):
                     try:
-                        from io import BytesIO
-                        from pdfminer.high_level import extract_text as pdf_extract
-                        page_text = pdf_extract(BytesIO(raw_cdc))[:6000]
-                        source_used = 'cdc_pdf'
+                        req_cdc = Request(pdf_url, headers={'User-Agent':'Mozilla/5.0'})
+                        with urlopen(req_cdc, timeout=12) as resp_cdc:
+                            raw_cdc = resp_cdc.read(150000)
+                        try:
+                            from io import BytesIO
+                            from pdfminer.high_level import extract_text as pdf_extract
+                            page_text = pdf_extract(BytesIO(raw_cdc))[:6000]
+                            source_used = 'cdc_pdf'
+                        except Exception:
+                            page_text = raw_cdc.decode('utf-8', errors='ignore')[:6000]
+                            source_used = 'cdc_raw'
+                    except Exception as e:
+                        log.warning(f"Batch CDC error {pdf_url}: {e}")
+                if not page_text:
+                    try:
+                        req_html = Request(url, headers={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+                        with urlopen(req_html, timeout=10) as resp_html:
+                            raw_html = resp_html.read(200000).decode('utf-8', errors='ignore')
+                        NOISE_PAT = re.compile('<(script|style|nav|header|footer|aside)[^>]*>.*?</(script|style|nav|header|footer|aside)>', re.IGNORECASE|re.DOTALL)
+                        clean = NOISE_PAT.sub(' ', raw_html)
+                        text = re.sub(r'<[^>]+>', ' ', clean)
+                        text = re.sub(r'\s+', ' ', text).strip()
+                        page_text = text[500:8500] if len(text) > 500 else text[:8000]
                     except Exception:
-                        page_text = raw_cdc.decode('utf-8', errors='ignore')[:6000]
-                        source_used = 'cdc_raw'
-                except Exception as e:
-                    log.warning(f"Batch CDC error {pdf_url}: {e}")
-
-            if not page_text:
-                try:
-                    req_html = Request(url, headers={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-                    with urlopen(req_html, timeout=10) as resp_html:
-                        raw_html = resp_html.read(200000).decode('utf-8', errors='ignore')
-                    NOISE_PAT = re.compile('<(script|style|nav|header|footer|aside)[^>]*>.*?</(script|style|nav|header|footer|aside)>', re.IGNORECASE|re.DOTALL)
-                    clean = NOISE_PAT.sub(' ', raw_html)
-                    text = re.sub(r'<[^>]+>', ' ', clean)
-                    text = re.sub(r'\s+', ' ', text).strip()
-                    page_text = text[500:8500] if len(text) > 500 else text[:8000]
-                except Exception as e:
-                    page_text = f"URL: {url} (contenu non accessible)"
-
-            cdc_mention = f"\nCahier des charges : {pdf_url}" if pdf_url else ""
-            user_content = f"Analyse ce dispositif et remplis la grille.{cdc_mention}\nURL : {url}\n[Source : {source_used}]\n\nContenu :\n{page_text}"
-            payload = json.dumps({
-                "model": "claude-haiku-4-5-20251001",
-                "max_tokens": 2000,
-                "system": COLLECT_PROMPT,
-                "messages": [{"role":"user","content":user_content}]
-            }).encode()
-            req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={
-                "Content-Type":"application/json",
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version":"2023-06-01"
-            }, method="POST")
-            with urlopen(req, timeout=30) as resp:
-                claude_data = json.loads(resp.read())
-            text_resp = claude_data["content"][0]["text"].strip()
-            m = re.search(r'\{[\s\S]*\}', text_resp)
-            disp = json.loads(m.group() if m else text_resp)
-            disp['source_url'] = url
-            if pdf_url: disp['cdc_url'] = pdf_url
-
-            # Save to DB
-            conn = get_db(); cur = conn.cursor()
-            src_url = disp.get('source_url', '')
-            cur.execute("SELECT id FROM dispositifs WHERE source_url=%s", (src_url,))
-            existing = cur.fetchone()
-            if existing:
-                result['status'] = 'duplicate'
-                result['titre'] = disp.get('titre', url)
-            else:
-                cols = ','.join(fields)
-                placeholders = ','.join(['%s']*len(fields))
-                vals = [disp.get(f,'') for f in fields]
-                if pkg_id:
-                    cur.execute(f"INSERT INTO dispositifs ({cols}, package_id) VALUES ({placeholders}, %s) RETURNING id", vals + [pkg_id])
+                        page_text = f"URL: {url}"
+                cdc_mention = f"\nCahier des charges : {pdf_url}" if pdf_url else ""
+                user_content = f"Analyse ce dispositif et remplis la grille.{cdc_mention}\nURL : {url}\n[Source : {source_used}]\n\nContenu :\n{page_text}"
+                payload = json.dumps({
+                    "model": "claude-haiku-4-5-20251001",
+                    "max_tokens": 2000,
+                    "system": COLLECT_PROMPT,
+                    "messages": [{"role":"user","content":user_content}]
+                }).encode()
+                req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={
+                    "Content-Type":"application/json",
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version":"2023-06-01"
+                }, method="POST")
+                with urlopen(req, timeout=30) as resp:
+                    claude_data = json.loads(resp.read())
+                text_resp = claude_data["content"][0]["text"].strip()
+                m = re.search(r'\{[\s\S]*\}', text_resp)
+                disp = json.loads(m.group() if m else text_resp)
+                disp['source_url'] = url
+                conn2 = get_db(); cur2 = conn2.cursor()
+                cur2.execute("SELECT id FROM dispositifs WHERE source_url=%s", (url,))
+                existing = cur2.fetchone()
+                if existing:
+                    result['status'] = 'duplicate'
+                    result['titre'] = disp.get('titre', url)
                 else:
-                    cur.execute(f"INSERT INTO dispositifs ({cols}) VALUES ({placeholders}) RETURNING id", vals)
-                saved_id = cur.fetchone()['id']
-                conn.commit()
-                result['status'] = 'saved'
-                result['titre'] = disp.get('titre', url)
-                result['id'] = saved_id
-            cur.close(); conn.close()
+                    cols = ','.join(fields)
+                    placeholders = ','.join(['%s']*len(fields))
+                    vals = [disp.get(f,'') for f in fields]
+                    if pkg_id:
+                        cur2.execute(f"INSERT INTO dispositifs ({cols}, package_id) VALUES ({placeholders}, %s) RETURNING id", vals + [pkg_id])
+                    else:
+                        cur2.execute(f"INSERT INTO dispositifs ({cols}) VALUES ({placeholders}) RETURNING id", vals)
+                    conn2.commit()
+                    result['status'] = 'saved'
+                    result['titre'] = disp.get('titre', url)
+                cur2.close(); conn2.close()
+            except Exception as e:
+                result['error'] = str(e)[:120]
+                log.error(f"Batch error {url}: {e}")
+            _batch_jobs[job_id]['results'].append(result)
+            _batch_jobs[job_id]['done'] += 1
+        _batch_jobs[job_id]['status'] = 'done'
 
-        except Exception as e:
-            result['error'] = str(e)[:120]
-            log.error(f"Batch collect error {url}: {e}")
+    t = threading.Thread(target=run_job, daemon=True)
+    t.start()
+    return jsonify({'job_id': job_id, 'total': len(urls), 'pkg_id': pkg_id, 'pkg_name': package_name})
 
-        results.append(result)
 
-    return jsonify({'results': results, 'package_id': pkg_id, 'package_name': package_name})
+@app.route('/api/collect-batch/<job_id>', methods=['GET'])
+def collect_batch_status(job_id):
+    """Poll batch collect job status."""
+    job = _batch_jobs.get(job_id)
+    if not job:
+        return jsonify({'error': 'Job introuvable'}), 404
+    return jsonify(job)
+
 
 @app.route('/api/dispositifs', methods=['GET'])
 def get_dispositifs():
