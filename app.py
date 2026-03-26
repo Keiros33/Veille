@@ -1706,11 +1706,11 @@ body {
   <div class="header-tag">Espace Collecte</div>
   <nav class="header-tabs">
     <a class="header-tab header-tab-back" href="/app" title="Retour à la curation">← Curation</a>
-    <button class="header-tab active" onclick="switchTab('veille', this)">📰 Veille</button>
-    <button class="header-tab" onclick="switchTab('dispositifs', this)">🗄 Dispositifs</button>
-    <button class="header-tab" onclick="switchTab('cdc', this)">📋 Cahiers des charges</button>
-    <button class="header-tab" onclick="switchTab('journal', this)">📰 Journal</button>
-    <button class="header-tab" onclick="switchTab('veille360', this)">🔍 Pré-veille 360°</button>
+    <button class="header-tab active" onclick="switchTab(&quot;veille&quot;, this)">📰 Veille</button>
+    <button class="header-tab" onclick="switchTab(&quot;dispositifs&quot;, this)">🗄 Dispositifs</button>
+    <button class="header-tab" onclick="switchTab(&quot;cdc&quot;, this)">📋 Cahiers des charges</button>
+    <button class="header-tab" onclick="switchTab(&quot;journal&quot;, this)">📰 Journal</button>
+    <button class="header-tab" onclick="switchTab(&quot;veille360&quot;, this)">🔍 Pré-veille 360°</button>
   </nav>
   <div class="header-search">
     <span class="header-search-icon">🔍</span>
@@ -1749,10 +1749,10 @@ body {
       <div class="vf-row">
         <button onclick="refreshVeille()" class="disp-refresh-btn" title="Rafraîchir la veille">↺</button>
         <div class="vf-btns">
-          <button class="vf-btn active" id="vft-all"  onclick="setViewFilter('all',  this)">Tout</button>
-          <button class="vf-btn"        id="vft-actu" onclick="setViewFilter('actu', this)">📰 Actualités</button>
-          <button class="vf-btn"        id="vft-disp" onclick="setViewFilter('disp', this)">⭐ Dispositifs</button>
-          <button class="vf-btn"        id="vft-cdc"  onclick="setViewFilter('cdc',  this)">📋 Avec CDC</button>
+          <button class="vf-btn active" id="vft-all"  onclick="setViewFilter(&quot;all&quot;,  this)">Tout</button>
+          <button class="vf-btn"        id="vft-actu" onclick="setViewFilter(&quot;actu&quot;, this)">📰 Actualités</button>
+          <button class="vf-btn"        id="vft-disp" onclick="setViewFilter(&quot;disp&quot;, this)">⭐ Dispositifs</button>
+          <button class="vf-btn"        id="vft-cdc"  onclick="setViewFilter(&quot;cdc&quot;,  this)">📋 Avec CDC</button>
         </div>
         <div class="vf-right">
           <span class="result-count" id="result-count">— articles</span>
@@ -1769,15 +1769,15 @@ body {
             </button>
             <div id="collect-submenu" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:999;min-width:260px;overflow:hidden;">
               <div style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);border-bottom:1px solid var(--border);">Choisir ce qu'on collecte</div>
-              <button onclick="collectAllMissing('all')" class="collect-submenu-item">
+              <button onclick="collectAllMissing(&quot;all&quot;)" class="collect-submenu-item">
                 <span style="font-size:15px;">📥</span>
                 <div><div style="font-weight:700;font-size:12px;">Tous les dispositifs</div><div style="font-size:11px;color:var(--muted);">Avec et sans CDC</div></div>
               </button>
-              <button onclick="collectAllMissing('cdc')" class="collect-submenu-item" style="border-top:1px solid var(--border);">
+              <button onclick="collectAllMissing(&quot;cdc&quot;)" class="collect-submenu-item" style="border-top:1px solid var(--border);">
                 <span style="font-size:15px;">📋</span>
                 <div><div style="font-weight:700;font-size:12px;color:#3a6000;">Dispositifs avec CDC</div><div style="font-size:11px;color:var(--muted);">Qualité supérieure — recommandé</div></div>
               </button>
-              <button onclick="collectAllMissing('nocdc')" class="collect-submenu-item" style="border-top:1px solid var(--border);">
+              <button onclick="collectAllMissing(&quot;nocdc&quot;)" class="collect-submenu-item" style="border-top:1px solid var(--border);">
                 <span style="font-size:15px;">🌐</span>
                 <div><div style="font-weight:700;font-size:12px;">Dispositifs sans CDC</div><div style="font-size:11px;color:var(--muted);">Via la page web uniquement</div></div>
               </button>
@@ -1796,8 +1796,8 @@ body {
       <div class="disp-controls">
         <button onclick="refreshDispositifs()" class="disp-refresh-btn" title="Rafraîchir les dispositifs">↺</button>
         <div class="disp-view-toggle">
-          <button class="dv-btn active" id="dv-cards" onclick="setDispView('cards', this)">🗂 Bibliothèque</button>
-          <button class="dv-btn"        id="dv-table" onclick="setDispView('table', this)">📊 Base de données</button>
+          <button class="dv-btn active" id="dv-cards" onclick="setDispView(&quot;cards&quot;, this)">🗂 Bibliothèque</button>
+          <button class="dv-btn"        id="dv-table" onclick="setDispView(&quot;table&quot;, this)">📊 Base de données</button>
         </div>
         <input id="disp-search" placeholder="Rechercher…" oninput="filterDispositifs()" class="disp-search-input">
         <select id="disp-filter-benef" onchange="filterDispositifs()" class="disp-filter-sel">
@@ -1840,19 +1840,19 @@ body {
         <table class="disp-table" id="disp-table">
           <thead>
             <tr>
-              <th onclick="sortDispTable('titre')" class="dt-sort">Titre ↕</th>
-              <th onclick="sortDispTable('guichet_financeur')" class="dt-sort">Financeur ↕</th>
-              <th onclick="sortDispTable('nature')" class="dt-sort">Nature ↕</th>
-              <th onclick="sortDispTable('beneficiaire')" class="dt-sort">Bénéficiaire ↕</th>
-              <th onclick="sortDispTable('territoire')" class="dt-sort">Territoire ↕</th>
-              <th onclick="sortDispTable('type_depot')" class="dt-sort">Dépôt ↕</th>
-              <th onclick="sortDispTable('date_fermeture')" class="dt-sort">Clôture ↕</th>
+              <th onclick="sortDispTable(&quot;titre&quot;)" class="dt-sort">Titre ↕</th>
+              <th onclick="sortDispTable(&quot;guichet_financeur&quot;)" class="dt-sort">Financeur ↕</th>
+              <th onclick="sortDispTable(&quot;nature&quot;)" class="dt-sort">Nature ↕</th>
+              <th onclick="sortDispTable(&quot;beneficiaire&quot;)" class="dt-sort">Bénéficiaire ↕</th>
+              <th onclick="sortDispTable(&quot;territoire&quot;)" class="dt-sort">Territoire ↕</th>
+              <th onclick="sortDispTable(&quot;type_depot&quot;)" class="dt-sort">Dépôt ↕</th>
+              <th onclick="sortDispTable(&quot;date_fermeture&quot;)" class="dt-sort">Clôture ↕</th>
               <th>Montants</th>
               <th>Objectif</th>
               <th>Dépenses éligibles</th>
               <th>Critères</th>
               <th>Points vigilance</th>
-              <th onclick="sortDispTable('guichet_instructeur')" class="dt-sort">Instructeur ↕</th>
+              <th onclick="sortDispTable(&quot;guichet_instructeur&quot;)" class="dt-sort">Instructeur ↕</th>
               <th>Programme EU</th>
               <th>Contact</th>
               <th style="width:80px;text-align:center;">Export</th>
@@ -2030,9 +2030,9 @@ body {
 
         <!-- Onglets du projet -->
         <div class="ep-tabs">
-          <button class="ep-tab active" id="ept-analyse" onclick="switchEpTab('analyse',this)">🔍 Analyse 360°</button>
-          <button class="ep-tab" id="ept-shortlist" onclick="switchEpTab('shortlist',this)">⭐ Shortlist</button>
-          <button class="ep-tab" id="ept-notes" onclick="switchEpTab('notes',this)">📝 Notes</button>
+          <button class="ep-tab active" id="ept-analyse" onclick="switchEpTab(&quot;analyse&quot;,this)">🔍 Analyse 360°</button>
+          <button class="ep-tab" id="ept-shortlist" onclick="switchEpTab(&quot;shortlist&quot;,this)">⭐ Shortlist</button>
+          <button class="ep-tab" id="ept-notes" onclick="switchEpTab(&quot;notes&quot;,this)">📝 Notes</button>
         </div>
 
         <!-- Volet Analyse 360° -->
@@ -2095,7 +2095,7 @@ body {
           <textarea id="ep-email-content" style="width:100%;min-height:220px;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:12px;line-height:1.7;background:var(--surface2);color:var(--text);resize:vertical;font-family:monospace;box-sizing:border-box;"></textarea>
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
             <button onclick="copyEmail()" style="padding:8px 18px;border:1.5px solid var(--accent);border-radius:8px;background:none;color:var(--accent);cursor:pointer;font-size:12px;font-weight:700;">📋 Copier</button>
-            <button onclick="document.getElementById('ep-email-modal').style.display='none'" style="padding:8px 18px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;font-size:12px;">Fermer</button>
+            <button onclick="document.getElementById(&quot;ep-email-modal&quot;).style.display=&quot;none&quot;" style="padding:8px 18px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;font-size:12px;">Fermer</button>
           </div>
         </div>
       </div>
@@ -2110,7 +2110,7 @@ body {
   <div style="background:var(--surface);border-radius:12px;width:92%;max-width:920px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);">
     <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:12px 12px 0 0;">
       <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--accent);" id="v360-modal-title">Analyse 360°</div>
-      <button onclick="document.getElementById('v360-modal').style.display='none'"
+      <button onclick="document.getElementById(&quot;v360-modal&quot;).style.display=&quot;none&quot;"
         style="background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--muted);">✕</button>
     </div>
     <div style="flex:1;overflow-y:auto;padding:16px 20px;font-size:12px;line-height:1.6;color:var(--text);" id="v360-modal-body"></div>
@@ -2496,6 +2496,9 @@ function loadJournalEditionById(el) { loadJournalEdition(parseInt(el.getAttribut
 function deleteJournalEditionById(e, btn) { deleteJournalEdition(e, parseInt(btn.getAttribute('data-jid'))); }
 function openDispPptxById(btn) { openDispPptx(parseInt(btn.getAttribute('data-did'))); }
 
+function closeEpEmailModal() { var el = document.getElementById('ep-email-modal'); if(el) el.style.display='none'; }
+function closeV360Modal() { var el = document.getElementById('v360-modal'); if(el) el.style.display='none'; }
+
 async function init() {
   buildSidebar();
   updateLockState();
@@ -2508,13 +2511,13 @@ function buildSidebar() {
   const container = document.getElementById('filter-groups');
   container.innerHTML = TAG_GROUPS.map(g => `
     <div class="filter-group" id="fg-${g.key}">
-      <div class="filter-group-header" onclick="toggleGroup('${g.key}')">
+      <div class="filter-group-header" onclick="toggleGroup(&quot;${g.key}&quot;)">
         <span class="filter-group-label">${g.label}</span>
         <span class="filter-group-count" id="fc-${g.key}">0</span>
         <span class="filter-group-arrow">›</span>
       </div>
       <div class="filter-tags" id="ft-${g.key}">
-        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag('${g.key}','${t.replace(/'/g,"\\'")}',this)">${t}</span>`).join('')}
+        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag(&quot;${g.key}&quot;,&quot;${t.replace(/&quot;/g,"\\'")}',this)">${t}</span>`).join('')}
       </div>
     </div>
   `).join('');
@@ -3040,10 +3043,10 @@ async function loadV360Sessions() {
     }
     list.innerHTML = sessions.map(function(s) {
       var date = s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : '';
-      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="loadV360Session(' + s.id + ')">' +
+      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="loadV360Session(&quot; + s.id + &quot;)">' +
         '<div style="flex:1;"><div style="font-weight:700;font-size:13px;">' + (s.client_name||'Sans nom') + '</div>' +
         '<div style="font-size:11px;color:var(--muted);">' + date + '</div></div>' +
-        '<button onclick="deleteV360Session(event,' + s.id + ')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:4px;">✕</button>' +
+        '<button onclick="deleteV360Session(event,&quot; + s.id + &quot;)" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:4px;">✕</button>' +
         '</div>';
     }).join('');
   } catch(e) {}
@@ -3393,13 +3396,13 @@ function buildSidebar() {
   const container = document.getElementById('filter-groups');
   container.innerHTML = TAG_GROUPS.map(g => `
     <div class="filter-group" id="fg-${g.key}">
-      <div class="filter-group-header" onclick="toggleGroup('${g.key}')">
+      <div class="filter-group-header" onclick="toggleGroup(&quot;${g.key}&quot;)">
         <span class="filter-group-label">${g.label}</span>
         <span class="filter-group-count" id="fc-${g.key}">0</span>
         <span class="filter-group-arrow">›</span>
       </div>
       <div class="filter-tags" id="ft-${g.key}">
-        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag('${g.key}','${t.replace(/'/g,"\\'")}',this)">${t}</span>`).join('')}
+        ${g.tags.map(t => `<span class="filter-tag" id="ftag-${CSS.escape(t)}" onclick="toggleTag(&quot;${g.key}&quot;,&quot;${t.replace(/&quot;/g,"\\'")}',this)">${t}</span>`).join('')}
       </div>
     </div>
   `).join('');
