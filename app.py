@@ -2154,7 +2154,9 @@ body {
           <span id="pkg-detail-name" style="font-family:'Syne',sans-serif;font-weight:800;font-size:15px;color:var(--accent);flex:1;"></span>
           <span id="pkg-detail-count" style="font-size:11px;color:var(--muted);"></span>
           <button onclick="exportPackageCdc()" id="pkg-cdc-btn" style="background:var(--surface2);color:var(--accent);border:1.5px solid var(--border);border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">📎 CDCs</button>
+          <button onclick="openMergeModal()" style="background:var(--surface2);color:var(--accent);border:1.5px solid var(--border);border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">🔀 Fusionner</button>
           <button onclick="exportPackagePptx()" style="background:var(--accent);color:var(--lime);border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">📊 Exporter PPTX</button>
+          <button onclick="deleteCurrentPackage()" style="background:none;border:1.5px solid rgba(200,57,43,0.3);border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;color:#c8392b;font-family:'DM Sans',sans-serif;">🗑</button>
         </div>
         <div id="pkg-detail-grid" style="flex:1;overflow-y:auto;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;"></div>
       </div>
@@ -2264,7 +2266,7 @@ body {
         <div id="mc-dropzone" onclick="document.getElementById('mc-file-input').click()" style="border:2px dashed var(--border);border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:all 0.18s;">
           <div style="font-size:28px;margin-bottom:8px;">📊</div>
           <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:4px;">Cliquez ou glissez un fichier .xlsx</div>
-          <div style="font-size:11px;color:var(--muted);">URLs en colonne A · Feuille 1 · Max 20 liens</div>
+          <div style="font-size:11px;color:var(--muted);">URLs en colonne A · Feuille 1 · Max 30 liens</div>
           <input id="mc-file-input" type="file" accept=".xlsx,.xls" style="display:none;" onchange="onExcelFileSelected(this)">
         </div>
         <div id="mc-file-name" style="margin-top:10px;font-size:11px;color:var(--accent);font-weight:600;text-align:center;display:none;"></div>
@@ -2295,6 +2297,35 @@ body {
 
   </div>
 </div>
+<!-- MODAL FUSION PACKAGES -->
+<div id="merge-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:600;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:14px;width:460px;max-width:95vw;box-shadow:0 16px 48px rgba(26,60,46,0.18);overflow:hidden;">
+    <div style="background:var(--accent);padding:16px 20px;display:flex;align-items:center;gap:12px;">
+      <div style="width:32px;height:32px;background:var(--lime);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;">🔀</div>
+      <div>
+        <div style="font-weight:800;font-size:14px;color:#fff;">Fusionner avec un autre package</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:1px;">Les dispositifs seront regroupés dans un nouveau package</div>
+      </div>
+      <button onclick="closeMergeModal()" style="margin-left:auto;background:rgba(255,255,255,0.1);border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;color:rgba(255,255,255,0.7);font-size:15px;">✕</button>
+    </div>
+    <div style="padding:20px;">
+      <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Package à fusionner avec</div>
+      <select id="merge-target-select" style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;"></select>
+      <div style="margin-top:14px;">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Nom du package fusionné</div>
+        <input id="merge-name-input" type="text" placeholder="Nom du nouveau package…" style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;">
+      </div>
+      <div style="margin-top:10px;padding:10px 12px;background:var(--lime-bg);border-radius:8px;font-size:11px;color:var(--accent);">
+        ℹ️ Les deux packages sources seront supprimés après fusion. Les dispositifs sont fusionnés sans doublons.
+      </div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;">
+      <button onclick="closeMergeModal()" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Annuler</button>
+      <button onclick="confirmMerge()" id="merge-confirm-btn" style="background:var(--accent);color:var(--lime);border:none;border-radius:7px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Fusionner</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -3491,6 +3522,69 @@ function closePkgDetail() {
   document.getElementById('pkg-detail').style.display = 'none';
   document.getElementById('pkg-list').style.display = 'grid';
   currentPkgId = null;
+}
+
+// ── DELETE CURRENT PACKAGE ────────────────────────────────────────────
+async function deleteCurrentPackage() {
+  if (!currentPkgId) return;
+  var name = document.getElementById('pkg-detail-name').textContent;
+  if (!confirm('Supprimer le package "' + name + '" ? Les dispositifs seront détachés mais resteront dans la base.')) return;
+  try {
+    await fetch(API + '/api/packages/' + currentPkgId, { method: 'DELETE' });
+    showToast('Package supprimé');
+    closePkgDetail();
+    loadPackages();
+  } catch(e) { showToast('Erreur : ' + e.message); }
+}
+
+// ── MERGE MODAL ────────────────────────────────────────────────────────
+async function openMergeModal() {
+  if (!currentPkgId) return;
+  var currentName = document.getElementById('pkg-detail-name').textContent;
+  // Load other packages for select
+  try {
+    var res = await fetch(API + '/api/packages');
+    var pkgs = await res.json();
+    var others = pkgs.filter(function(p) { return p.id !== currentPkgId; });
+    var sel = document.getElementById('merge-target-select');
+    if (!others.length) { showToast('Aucun autre package disponible'); return; }
+    sel.innerHTML = others.map(function(p) {
+      return '<option value="' + p.id + '">' + p.name + ' (' + p.nb + ' dispositifs)</option>';
+    }).join('');
+    document.getElementById('merge-name-input').value = currentName + ' (fusionné)';
+    document.getElementById('merge-modal').style.display = 'flex';
+    setTimeout(function(){ document.getElementById('merge-name-input').select(); }, 100);
+  } catch(e) { showToast('Erreur : ' + e.message); }
+}
+
+function closeMergeModal() {
+  document.getElementById('merge-modal').style.display = 'none';
+}
+
+async function confirmMerge() {
+  var targetId = parseInt(document.getElementById('merge-target-select').value);
+  var newName = document.getElementById('merge-name-input').value.trim();
+  if (!newName) { document.getElementById('merge-name-input').focus(); return; }
+  var btn = document.getElementById('merge-confirm-btn');
+  btn.disabled = true; btn.textContent = 'Fusion…';
+  try {
+    var res = await fetch(API + '/api/packages/merge', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ pkg_a: currentPkgId, pkg_b: targetId, name: newName })
+    });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+    showToast('Packages fusionnés en "' + data.name + '"');
+    closeMergeModal();
+    closePkgDetail();
+    loadPackages();
+    // Open the new merged package
+    setTimeout(function(){ openPkgDetail(data.new_id, data.name); }, 400);
+  } catch(e) {
+    showToast('Erreur : ' + e.message);
+    btn.disabled = false; btn.textContent = 'Fusionner';
+  }
 }
 
 function exportPackagePptx() {
@@ -9238,6 +9332,46 @@ def get_package_dispositifs(pid):
     return jsonify(result)
 
 
+
+@app.route('/api/packages/merge', methods=['POST'])
+def merge_packages():
+    """Merge two packages into a new one."""
+    data = request.get_json()
+    pkg_a = data.get('pkg_a')  # source package (current)
+    pkg_b = data.get('pkg_b')  # target package to merge with
+    new_name = data.get('name', '').strip()
+    if not pkg_a or not pkg_b or not new_name:
+        return jsonify({'error': 'Paramètres manquants'}), 400
+    if pkg_a == pkg_b:
+        return jsonify({'error': 'Impossible de fusionner un package avec lui-même'}), 400
+
+    conn = get_db(); cur = conn.cursor()
+    # Create new package
+    cur.execute("INSERT INTO packages (name) VALUES (%s) RETURNING id", (new_name,))
+    new_id = cur.fetchone()['id']
+    # Move all dispositifs from A and B into new package (deduplicate by source_url)
+    cur.execute("""
+        INSERT INTO dispositifs (guichet_financeur, guichet_instructeur, titre, nature,
+            beneficiaire, type_depot, date_fermeture, objectif, types_depenses,
+            operations_eligibles, depenses_eligibles, criteres_eligibilite,
+            depenses_ineligibles, montants_taux, thematiques, territoire,
+            points_vigilance, contact, programme_europeen, source_url, cdc_url, package_id)
+        SELECT DISTINCT ON (COALESCE(source_url, gen_random_uuid()::text))
+            guichet_financeur, guichet_instructeur, titre, nature,
+            beneficiaire, type_depot, date_fermeture, objectif, types_depenses,
+            operations_eligibles, depenses_eligibles, criteres_eligibilite,
+            depenses_ineligibles, montants_taux, thematiques, territoire,
+            points_vigilance, contact, programme_europeen, source_url, cdc_url, %s
+        FROM dispositifs
+        WHERE package_id IN (%s, %s)
+        ORDER BY COALESCE(source_url, gen_random_uuid()::text), collected_at DESC
+    """, (new_id, pkg_a, pkg_b))
+    # Delete source packages (dispositifs cascade to SET NULL, already moved)
+    cur.execute("DELETE FROM dispositifs WHERE package_id IN (%s, %s)", (pkg_a, pkg_b))
+    cur.execute("DELETE FROM packages WHERE id IN (%s, %s)", (pkg_a, pkg_b))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'status': 'merged', 'new_id': new_id, 'name': new_name})
+
 @app.route('/api/packages/<int:pid>/export-cdc', methods=['GET'])
 def export_package_cdc(pid):
     """Download all CDC documents for a package as a ZIP."""
@@ -9475,7 +9609,7 @@ def collect_batch():
         wb = openpyxl.load_workbook(_io.BytesIO(file.read()), read_only=True, data_only=True)
         ws = wb.worksheets[0]
         urls = []
-        for row in ws.iter_rows(min_row=1, max_row=21, min_col=1, max_col=1, values_only=True):
+        for row in ws.iter_rows(min_row=1, max_row=31, min_col=1, max_col=1, values_only=True):
             val = row[0]
             if val and isinstance(val, str) and val.strip().startswith('http'):
                 urls.append(val.strip())
@@ -9485,7 +9619,7 @@ def collect_batch():
 
     if not urls:
         return jsonify({'error': 'Aucune URL trouvee en colonne A'}), 400
-    urls = urls[:20]
+    urls = urls[:30]
 
     # Create package if requested
     pkg_id = None
