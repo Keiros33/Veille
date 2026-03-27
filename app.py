@@ -753,46 +753,41 @@ def generate_dispositif_pptx(data):
                 matched_key = key
                 break
 
-        # ── Tentative 1 : Clearbit Logo API (logo officiel HD) ──────────
-        # Deviner le domaine depuis la clé ou le nom
-        DOMAIN_MAP = {
-            'ademe': 'ademe.fr', 'bpifrance': 'bpifrance.fr',
-            'anah': 'anah.fr', 'anct': 'anct.gouv.fr',
-            'cerema': 'cerema.fr', 'banque_territoires': 'banquedesterritoires.fr',
-            'caisse_depots': 'caissedesdepots.fr', 'france_2030': 'gouvernement.fr',
-            'anr': 'anr.fr', 'dreal': 'ecologie.gouv.fr',
-            'dreets': 'travail.gouv.fr', 'direccte': 'travail.gouv.fr',
-            'carsat': 'carsat.fr', 'urssaf': 'urssaf.fr', 'msa': 'msa.fr',
-            'feader': 'europe-en-france.gouv.fr', 'feder': 'europe-en-france.gouv.fr',
-            'fse': 'europe-en-france.gouv.fr', 'europe': 'europa.eu',
-            'aura': 'auvergnerhonealpes.fr', 'bretagne': 'bretagne.bzh',
-            'normandie': 'normandie.fr', 'occitanie': 'laregion.fr',
-            'nouvelle_aquitaine': 'nouvelle-aquitaine.fr', 'grand_est': 'grandest.fr',
-            'hauts_france': 'hautsdefrance.fr', 'ile_france': 'iledefrance.fr',
-            'paca': 'maregionsud.fr', 'pays_loire': 'paysdelaloire.fr',
-            'bourgogne_fc': 'bourgognefranchecomte.fr', 'centre_val': 'centre-valdeloire.fr',
-            'corse': 'isula.corsica', 'guadeloupe': 'regionguadeloupe.fr',
-            'martinique': 'martinique.fr', 'reunion': 'regionreunion.com',
-            'mayotte': 'mayotte.fr', 'guyane': 'guyane.fr',
-        }
-        if matched_key and matched_key in DOMAIN_MAP:
-            domain = DOMAIN_MAP[matched_key]
-            try:
-                clearbit_url = f'https://logo.clearbit.com/{domain}?size=128'
-                req_cb = ureq.Request(clearbit_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with ureq.urlopen(req_cb, timeout=5) as resp_cb:
-                    data = resp_cb.read()
-                    ct = resp_cb.headers.get('content-type', '')
-                    # Clearbit retourne une image SVG/PNG valide si le logo existe
-                    if len(data) > 500 and ('image' in ct or data[:4] in (b'\x89PNG', b'<svg', b'GIF8', b'\xff\xd8')):
-                        ext = 'png' if b'\x89PNG' in data[:8] else ('svg+xml' if b'<svg' in data[:100] else 'jpeg')
-                        return data, 'png' if ext == 'svg+xml' else ext
-            except Exception:
-                pass  # Timeout ou domaine inconnu → fallback
-
-        # ── Tentative 2 : PNG embarqué (toujours disponible) ────────────
+        # ── Logo : LOGO_B64 embarqué en priorité, Google favicon en fallback ──
         if matched_key and matched_key in LOGO_B64:
             return b64mod2.b64decode(LOGO_B64[matched_key]), 'png'
+
+        # Fallback : Google favicon service (sz=128, très fiable)
+        try:
+            domain = None
+            DOMAIN_MAP = {
+                'ademe': 'ademe.fr', 'bpifrance': 'bpifrance.fr',
+                'anah': 'anah.fr', 'anct': 'anct.gouv.fr',
+                'cerema': 'cerema.fr', 'banque_territoires': 'banquedesterritoires.fr',
+                'caisse_depots': 'caissedesdepots.fr', 'france_2030': 'gouvernement.fr',
+                'anr': 'anr.fr', 'dreal': 'ecologie.gouv.fr',
+                'dreets': 'travail.gouv.fr', 'carsat': 'carsat.fr',
+                'urssaf': 'urssaf.fr', 'msa': 'msa.fr',
+                'europe': 'europa.eu', 'feader': 'europe-en-france.gouv.fr',
+                'feder': 'europe-en-france.gouv.fr', 'fse': 'europe-en-france.gouv.fr',
+                'aura': 'auvergnerhonealpes.fr', 'bretagne': 'bretagne.bzh',
+                'normandie': 'normandie.fr', 'occitanie': 'laregion.fr',
+                'nouvelle_aquitaine': 'nouvelle-aquitaine.fr', 'grand_est': 'grandest.fr',
+                'hauts_france': 'hautsdefrance.fr', 'ile_france': 'iledefrance.fr',
+                'paca': 'maregionsud.fr', 'pays_loire': 'paysdelaloire.fr',
+                'bourgogne_fc': 'bourgognefranchecomte.fr', 'centre_val': 'centre-valdeloire.fr',
+            }
+            if matched_key and matched_key in DOMAIN_MAP:
+                domain = DOMAIN_MAP[matched_key]
+            if domain:
+                favicon_url = f'https://www.google.com/s2/favicons?domain={domain}&sz=128'
+                req_fav = ureq.Request(favicon_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with ureq.urlopen(req_fav, timeout=4) as resp_fav:
+                    img_data = resp_fav.read()
+                    if len(img_data) > 200:
+                        return img_data, 'png'
+        except Exception:
+            pass
 
         return None, None
 
@@ -934,21 +929,42 @@ def generate_dispositif_pptx(data):
                     run.text = titre
                     run.font.size = titre_font_size(titre)
 
+        elif sid == 3:
+            # NATURE / FINANCEUR / INSTRUCTEUR / DEPOT — identique slide 1
+            paras = list(shape.text_frame.paragraphs)
+            raw_depot = safe(data.get('type_depot')).lower()
+            if 'fil' in raw_depot or 'continu' in raw_depot or 'guichet' in raw_depot:
+                depot_txt = "Au fil de l'eau"
+            elif 'clôtur' in raw_depot or 'clotur' in raw_depot or 'fermé' in raw_depot or 'ferm' in raw_depot:
+                depot_txt = "Clôturé"
+            elif 'renouvell' in raw_depot or 'attente' in raw_depot:
+                depot_txt = "En attente de renouvellement"
+            else:
+                depot_txt = "Date"
+            fc = safe(data.get('date_fermeture'))
+            if fc and fc != '—':
+                depot_txt += f' — Clôture : {fc}'
+            vals2 = [
+                safe(data.get('nature')),
+                guichet,
+                safe(data.get('guichet_instructeur')),
+                depot_txt,
+            ]
+            for i2, para in enumerate(paras):
+                runs = list(para.runs)
+                if len(runs) >= 2 and i2 < len(vals2):
+                    runs[1].text = vals2[i2]
+
         elif sid == 14:
             set_second_para(shape, safe(data.get('beneficiaire')))
 
         elif sid == 15:
-            shape.height = int(1.65 * 914400)   # était 1.52" — un peu plus haut
             set_second_para(shape, safe(data.get('montants_taux'))[:280])
 
         elif sid == 16:
-            # Descendre légèrement + agrandir la zone points de vigilance
-            shape.top    = int(4.40 * 914400)   # était 4.245"
-            shape.height = int(2.10 * 914400)   # était 1.99"
             set_second_para(shape, safe(data.get('points_vigilance'))[:280])
 
         elif sid == 5:
-            # Logo zone slide 2
             if logo_bytes:
                 add_logo_image(slide2, 5, logo_bytes, logo_ext)
             else:
