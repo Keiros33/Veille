@@ -596,42 +596,52 @@ def api_delete_source(url):
     return jsonify({'status':'deleted'})
 
 COLLECT_PROMPT = """Tu es un expert en analyse de dispositifs de financement publics français.
-Ta mission est d'analyser le contenu d'une page web et d'en extraire une grille structurée.
+Ta mission est d'analyser le contenu fourni (page web ou cahier des charges) et d'extraire une grille structurée précise.
 
 GRILLE À REMPLIR (19 champs obligatoires) :
-- Guichet financeur : l'organisme qui finance
-- Guichet instructeur : l'organisme qui instruit le dossier
-- Titre : nom exact du dispositif
-- Nature : catégorie parmi [Subvention, Prêt, Avance remboursable, Garantie, Crédit d'impôt, Investissement en fonds propres, Aide en nature, Exonération fiscale]
-- Bénéficiaire : parmi [Entreprise, PME, TPE, ETI, GE, Start-up, Association, Collectivité, Agriculteur, Particulier, Chercheur, ESS]
-- Type de dépôt : UNIQUEMENT une de ces 4 valeurs exactes : "Au fil de l'eau", "Date", "Clôturé", "En attente de renouvellement"
-- Date de fermeture : date limite de candidature
-- Objectif : objectif principal du dispositif (concis)
-- Types de dépenses : uniquement parmi [Investissement, Fonctionnement, Étude]
-- Opérations éligibles : actions/projets financés (concis)
-- Dépenses éligibles : postes de dépenses couverts (concis)
-- Critères d'éligibilité : conditions requises (concis)
-- Dépenses inéligibles : ce qui est exclu
-- Montants et taux d'aide : montants min/max, taux de couverture
-- Thématiques : sujets couverts
-- Territoire concerné : zone géographique
-- Points de vigilance : points d'attention importants
-- Contact : coordonnées de contact
-- Programme européen : uniquement si explicitement mentionné
 
-RÈGLES STRICTES :
+- guichet_financeur : l'organisme qui finance (ex: ADEME, Région Bretagne, Bpifrance)
+- guichet_instructeur : l'organisme qui instruit le dossier (souvent identique au financeur)
+- titre : nom exact du dispositif, tel qu'écrit dans la source
+- nature : UNE valeur parmi [Subvention, Prêt, Avance remboursable, Garantie, Crédit d'impôt, Investissement en fonds propres, Aide en nature, Exonération fiscale]
+
+- beneficiaire : LISTE TOUS les bénéficiaires éligibles séparés par " | "
+  Correspondances à appliquer SYSTÉMATIQUEMENT (ne pas en oublier) :
+  * Toute forme d'entreprise → Entreprise (et selon taille : PME, TPE, ETI, GE, Start-up)
+  * Toute collectivité, commune, EPCI, département, région, syndicat mixte → Collectivité
+  * Association, fondation, ONG → Association
+  * Exploitant agricole, coopérative agricole → Agriculteur
+  * Organisme de recherche, université, laboratoire → Chercheur
+  * Structure ESS, SCIC, SCOP, coopérative → ESS
+  * Personne physique, ménage, particulier → Particulier
+  IMPORTANT : si plusieurs types sont éligibles, TOUS doivent apparaître. Ex: "Collectivité | Entreprise | Association"
+
+- type_depot : EXACTEMENT une de ces 4 valeurs, en appliquant ces règles DANS L'ORDRE :
+  1. Si le texte indique que le dispositif est FERMÉ, CLOS, EXPIRÉ ou que la date limite EST PASSÉE → "Clôturé"
+  2. Si une date limite de dépôt EST MENTIONNÉE et qu'elle semble future → "Date"
+  3. Si le dispositif est en attente d'un prochain appel, en cours de renouvellement → "En attente de renouvellement"
+  4. Dans tous les autres cas (dépôt continu, guichet permanent, pas de date) → "Au fil de l'eau"
+  ATTENTION : "Date" ne signifie PAS qu'une date est mentionnée quelque part — cela signifie qu'il y a une date limite de dépôt active et future.
+
+- date_fermeture : date limite de candidature si connue et future. Si clôturé, indiquer la date de clôture passée. Sinon "Information non fournie"
+- objectif : objectif principal du dispositif — 1 phrase synthétique, MAX 180 caractères
+- types_depenses : valeurs parmi [Investissement, Fonctionnement, Étude] séparées par " | "
+- operations_eligibles : actions/projets financés — MAX 400 caractères, séparés par " | "
+- depenses_eligibles : postes de dépenses couverts — MAX 450 caractères, séparés par " | "
+- criteres_eligibilite : conditions requises — MAX 350 caractères, conditions clés séparées par " | "
+- depenses_ineligibles : ce qui est explicitement exclu — MAX 300 caractères
+- montants_taux : montants min/max, taux de couverture, plafonds — MAX 380 caractères
+- thematiques : sujets couverts séparés par " | "
+- territoire : zone géographique couverte
+- points_vigilance : 3-4 points d'attention MAX — MAX 400 caractères, séparés par " | "
+- contact : coordonnées de contact (email, téléphone, URL)
+- programme_europeen : nom du programme européen uniquement si explicitement mentionné, sinon "Information non fournie"
+
+RÈGLES GÉNÉRALES :
+- Si un cahier des charges (CDC) est fourni, il fait AUTORITÉ sur la page web — analyse-le en PRIORITÉ
 - Toute information absente = "Information non fournie"
-- Aucune déduction ni hypothèse
-- LONGUEURS MAXIMALES STRICTES (rendu PowerPoint — ne jamais dépasser) :
-  * objectif : 180 caractères max — 1 phrase synthétique
-  * operations_eligibles : 400 caractères max — lister toutes les opérations éligibles
-  * depenses_eligibles : 450 caractères max — lister tous les postes de dépenses couverts
-  * criteres_eligibilite : 350 caractères max — conditions clés uniquement
-  * montants_taux : 380 caractères max — détailler montants min/max, taux, plafonds
-  * points_vigilance : 400 caractères max — 3-4 points MAX, séparés par " | "
-  * Si le contenu dépasse : résume brutalement, supprime les détails secondaires
-  * Pour les listes : utiliser " | " comme séparateur, PAS de tirets ni de puces
-- Réponse UNIQUEMENT en JSON valide avec ces clés exactes :
+- Pour les listes : utiliser " | " comme séparateur, JAMAIS de tirets ni de puces ni de virgules
+- Réponse UNIQUEMENT en JSON valide, aucun texte avant ou après, avec ces clés exactes :
 guichet_financeur, guichet_instructeur, titre, nature, beneficiaire, type_depot,
 date_fermeture, objectif, types_depenses, operations_eligibles, depenses_eligibles,
 criteres_eligibilite, depenses_ineligibles, montants_taux, thematiques, territoire,
