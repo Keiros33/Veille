@@ -280,6 +280,16 @@ def init_db():
         name TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT NOW()
     )""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS batch_jobs (
+        job_id TEXT PRIMARY KEY,
+        status TEXT DEFAULT 'running',
+        total INTEGER DEFAULT 0,
+        done INTEGER DEFAULT 0,
+        pkg_id INTEGER,
+        pkg_name TEXT,
+        results JSONB DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
     try:
         cur.execute("ALTER TABLE dispositifs ADD COLUMN IF NOT EXISTS package_id INTEGER REFERENCES packages(id) ON DELETE SET NULL")
         conn.commit()
@@ -9516,8 +9526,42 @@ def export_package_pptx(pid):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-# ── Batch collect state ───────────────────────────────────────────────────────
-_batch_jobs = {}  # job_id -> {status, results, total, done, pkg_id, pkg_name}
+# ── Batch collect state (DB-backed, multi-worker safe) ───────────────────────
+def _job_update(job_id, done=None, result=None, status=None):
+    """Atomically update a batch job in DB."""
+    try:
+        conn = get_db(); cur = conn.cursor()
+        if result is not None:
+            cur.execute(
+                "UPDATE batch_jobs SET done=done+1, results=results||%s::jsonb WHERE job_id=%s",
+                (json.dumps([result]), job_id)
+            )
+        if status:
+            cur.execute("UPDATE batch_jobs SET status=%s WHERE job_id=%s", (status, job_id))
+        conn.commit(); cur.close(); conn.close()
+    except Exception as e:
+        log.error(f"job_update error: {e}")
+
+def _job_get(job_id):
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("SELECT * FROM batch_jobs WHERE job_id=%s", (job_id,))
+        row = cur.fetchone(); cur.close(); conn.close()
+        if not row: return None
+        return dict(row)
+    except Exception:
+        return None
+
+def _job_create(job_id, total, pkg_id, pkg_name):
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO batch_jobs (job_id, status, total, done, pkg_id, pkg_name, results) VALUES (%s,'running',%s,0,%s,%s,'[]')",
+            (job_id, total, pkg_id, pkg_name)
+        )
+        conn.commit(); cur.close(); conn.close()
+    except Exception as e:
+        log.error(f"job_create error: {e}")
 
 
 @app.route('/api/collect-cdc', methods=['POST'])
@@ -9631,10 +9675,7 @@ def collect_batch():
 
     import uuid
     job_id = str(uuid.uuid4())[:8]
-    _batch_jobs[job_id] = {
-        'status': 'running', 'results': [], 'total': len(urls),
-        'done': 0, 'pkg_id': pkg_id, 'pkg_name': package_name
-    }
+    _job_create(job_id, len(urls), pkg_id, package_name)
 
     # Run in background thread
     def run_job():
@@ -9724,9 +9765,8 @@ def collect_batch():
             except Exception as e:
                 result['error'] = str(e)[:120]
                 log.error(f"Batch error {url}: {e}")
-            _batch_jobs[job_id]['results'].append(result)
-            _batch_jobs[job_id]['done'] += 1
-        _batch_jobs[job_id]['status'] = 'done'
+            _job_update(job_id, result=result)
+        _job_update(job_id, status='done')
 
     t = threading.Thread(target=run_job, daemon=True)
     t.start()
@@ -9736,10 +9776,21 @@ def collect_batch():
 @app.route('/api/collect-batch/<job_id>', methods=['GET'])
 def collect_batch_status(job_id):
     """Poll batch collect job status."""
-    job = _batch_jobs.get(job_id)
+    job = _job_get(job_id)
     if not job:
         return jsonify({'error': 'Job introuvable'}), 404
-    return jsonify(job)
+    # Convert DB row to expected format
+    results = job.get('results') or []
+    if isinstance(results, str):
+        results = json.loads(results)
+    return jsonify({
+        'status': job['status'],
+        'total': job['total'],
+        'done': job['done'],
+        'pkg_id': job['pkg_id'],
+        'pkg_name': job['pkg_name'],
+        'results': results
+    })
 
 
 @app.route('/api/dispositifs', methods=['GET'])
