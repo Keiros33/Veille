@@ -285,6 +285,11 @@ def init_db():
         conn.commit()
     except Exception:
         conn.rollback()
+    try:
+        cur.execute("ALTER TABLE dispositifs ADD COLUMN IF NOT EXISTS cdc_url TEXT DEFAULT NULL")
+        conn.commit()
+    except Exception:
+        conn.rollback()
 
     conn.commit(); cur.close(); conn.close()
     log.info("DB ready")
@@ -2138,6 +2143,7 @@ body {
           <button onclick="closePkgDetail()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;">← Retour</button>
           <span id="pkg-detail-name" style="font-family:'Syne',sans-serif;font-weight:800;font-size:15px;color:var(--accent);flex:1;"></span>
           <span id="pkg-detail-count" style="font-size:11px;color:var(--muted);"></span>
+          <button onclick="exportPackageCdc()" id="pkg-cdc-btn" style="background:var(--surface2);color:var(--accent);border:1.5px solid var(--border);border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">📎 CDCs</button>
           <button onclick="exportPackagePptx()" style="background:var(--accent);color:var(--lime);border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">📊 Exporter PPTX</button>
         </div>
         <div id="pkg-detail-grid" style="flex:1;overflow-y:auto;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;"></div>
@@ -3480,6 +3486,31 @@ function closePkgDetail() {
 function exportPackagePptx() {
   if (!currentPkgId) return;
   window.open(API + '/api/packages/' + currentPkgId + '/export-pptx', '_blank');
+}
+
+async function exportPackageCdc() {
+  if (!currentPkgId) return;
+  var btn = document.getElementById('pkg-cdc-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Telechargement…'; }
+  try {
+    var res = await fetch(API + '/api/packages/' + currentPkgId + '/export-cdc');
+    if (!res.ok) {
+      var err = await res.json();
+      showToast(err.error || 'Aucun CDC disponible');
+      if (btn) { btn.disabled = false; btn.textContent = '📎 CDCs'; }
+      return;
+    }
+    var blob = await res.blob();
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'CDCs_package.zip';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    showToast('Erreur : ' + e.message);
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '📎 CDCs'; }
 }
 
 async function deletePackage(id, btn) {
@@ -9196,6 +9227,52 @@ def get_package_dispositifs(pid):
         result.append(d)
     return jsonify(result)
 
+
+@app.route('/api/packages/<int:pid>/export-cdc', methods=['GET'])
+def export_package_cdc(pid):
+    """Download all CDC documents for a package as a ZIP."""
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT name FROM packages WHERE id=%s", (pid,))
+    pkg = cur.fetchone()
+    if not pkg:
+        return jsonify({'error': 'Package introuvable'}), 404
+    cur.execute("SELECT titre, source_url, cdc_url FROM dispositifs WHERE package_id=%s AND cdc_url IS NOT NULL AND cdc_url != ''", (pid,))
+    rows = cur.fetchall(); cur.close(); conn.close()
+    if not rows:
+        return jsonify({'error': 'Aucun CDC trouvé dans ce package'}), 404
+
+    import zipfile, io as _io
+    from urllib.request import Request as _Req, urlopen as _open
+    buf = _io.BytesIO()
+    added = 0
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for r in rows:
+            titre = (r['titre'] or 'dispositif').replace('/', '-').replace('\\', '-')[:50]
+            cdc_url = r['cdc_url']
+            try:
+                ext = cdc_url.split('?')[0].rsplit('.', 1)[-1].lower()
+                if ext not in ('pdf', 'doc', 'docx', 'odt'):
+                    ext = 'pdf'
+                req = _Req(cdc_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with _open(req, timeout=15) as resp:
+                    data = resp.read(10_000_000)  # 10 Mo max
+                safe_name = f"{added+1:02d}_{titre}.{ext}"
+                zf.writestr(safe_name, data)
+                added += 1
+            except Exception as e:
+                log.warning(f"CDC download error {cdc_url}: {e}")
+                continue
+
+    if added == 0:
+        return jsonify({'error': 'Impossible de télécharger les CDCs'}), 500
+
+    buf.seek(0)
+    from flask import send_file
+    safe_pkg = pkg['name'].replace(' ', '_').replace('/', '-')[:40]
+    return send_file(buf, mimetype='application/zip',
+                     as_attachment=True,
+                     download_name=f"CDCs_{safe_pkg}.zip")
+
 @app.route('/api/packages/<int:pid>/export-pptx', methods=['GET'])
 def export_package_pptx(pid):
     conn = get_db(); cur = conn.cursor()
@@ -9420,7 +9497,7 @@ def collect_batch():
         fields = ['guichet_financeur','guichet_instructeur','titre','nature','beneficiaire',
                   'type_depot','date_fermeture','objectif','types_depenses','operations_eligibles',
                   'depenses_eligibles','criteres_eligibilite','depenses_ineligibles','montants_taux',
-                  'thematiques','territoire','points_vigilance','contact','programme_europeen','source_url']
+                  'thematiques','territoire','points_vigilance','contact','programme_europeen','source_url','cdc_url']
         for idx, url in enumerate(urls):
             result = {'url': url, 'index': idx, 'status': 'error', 'titre': '', 'error': ''}
             try:
@@ -9477,6 +9554,7 @@ def collect_batch():
                 m = re.search(r'\{[\s\S]*\}', text_resp)
                 disp = json.loads(m.group() if m else text_resp)
                 disp['source_url'] = url
+                if pdf_url: disp['cdc_url'] = pdf_url
                 conn2 = get_db(); cur2 = conn2.cursor()
                 # Only block duplicate within the same package (or globally if no package)
                 if pkg_id:
