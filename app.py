@@ -606,52 +606,101 @@ def api_delete_source(url):
     return jsonify({'status':'deleted'})
 
 COLLECT_PROMPT = """Tu es un expert en analyse de dispositifs de financement publics français.
-Ta mission est d'analyser le contenu fourni (page web ou cahier des charges) et d'extraire une grille structurée précise.
+Analyse le contenu fourni et extrais une grille structurée avec une précision maximale.
+Si un cahier des charges (CDC) est fourni, il fait AUTORITÉ — analyse-le en PRIORITÉ absolue.
 
-GRILLE À REMPLIR (19 champs obligatoires) :
+━━━ CHAMPS À REMPLIR ━━━
 
-- guichet_financeur : l'organisme qui finance (ex: ADEME, Région Bretagne, Bpifrance)
-- guichet_instructeur : l'organisme qui instruit le dossier (souvent identique au financeur)
-- titre : nom exact du dispositif, tel qu'écrit dans la source
-- nature : UNE valeur parmi [Subvention, Prêt, Avance remboursable, Garantie, Crédit d'impôt, Investissement en fonds propres, Aide en nature, Exonération fiscale]
+guichet_financeur
+L'organisme qui APPORTE les fonds — celui dont le budget est engagé.
+RÈGLE CRITIQUE : distingue toujours financeur et instructeur.
+  • Fonds européens (FEDER, FSE, FEADER, FEAMPA...) → le fonds européen EST le financeur, même si une région instruit
+  • Plusieurs cofinanceurs → les lister séparés par " | " (ex: "FEDER | Région Bretagne")
+  • ADEME, Bpifrance, CDC, banques publiques → financeur direct
+  • Ministères, ANAH, ANCT → financeur direct
+  NE PAS confondre avec l'instructeur : "le paiement est assuré par X" ≠ X est le financeur
 
-- beneficiaire : LISTE TOUS les bénéficiaires éligibles séparés par " | "
-  Correspondances à appliquer SYSTÉMATIQUEMENT (ne pas en oublier) :
-  * Toute forme d'entreprise → Entreprise (et selon taille : PME, TPE, ETI, GE, Start-up)
-  * Toute collectivité, commune, EPCI, département, région, syndicat mixte → Collectivité
-  * Association, fondation, ONG → Association
-  * Exploitant agricole, coopérative agricole → Agriculteur
-  * Organisme de recherche, université, laboratoire → Chercheur
-  * Structure ESS, SCIC, SCOP, coopérative → ESS
-  * Personne physique, ménage, particulier → Particulier
-  IMPORTANT : si plusieurs types sont éligibles, TOUS doivent apparaître. Ex: "Collectivité | Entreprise | Association"
+guichet_instructeur
+L'organisme qui REÇOIT et INSTRUIT les dossiers — le contact opérationnel.
+Souvent : Région, DREAL, DDETS, agence régionale, opérateur délégué.
+Peut être identique au financeur si non précisé.
 
-- type_depot : EXACTEMENT une de ces 4 valeurs, en appliquant ces règles DANS L'ORDRE :
-  1. Si le texte indique que le dispositif est FERMÉ, CLOS, EXPIRÉ ou que la date limite EST PASSÉE → "Clôturé"
-  2. Si une date limite de dépôt EST MENTIONNÉE et qu'elle semble future → "Date"
-  3. Si le dispositif est en attente d'un prochain appel, en cours de renouvellement → "En attente de renouvellement"
-  4. Dans tous les autres cas (dépôt continu, guichet permanent, pas de date) → "Au fil de l'eau"
-  ATTENTION : "Date" ne signifie PAS qu'une date est mentionnée quelque part — cela signifie qu'il y a une date limite de dépôt active et future.
+titre
+Nom exact du dispositif, tel qu'écrit dans la source. Ne pas inventer ni abréger.
 
-- date_fermeture : date limite de candidature si connue et future. Si clôturé, indiquer la date de clôture passée. Sinon "Information non fournie"
-- objectif : objectif principal du dispositif — 1 phrase synthétique, MAX 180 caractères
-- types_depenses : valeurs parmi [Investissement, Fonctionnement, Étude] séparées par " | "
-- operations_eligibles : actions/projets financés — MAX 400 caractères, séparés par " | "
-- depenses_eligibles : postes de dépenses couverts — MAX 450 caractères, séparés par " | "
-- criteres_eligibilite : conditions requises — MAX 350 caractères, conditions clés séparées par " | "
-- depenses_ineligibles : ce qui est explicitement exclu — MAX 300 caractères
-- montants_taux : montants min/max, taux de couverture, plafonds — MAX 380 caractères
-- thematiques : sujets couverts séparés par " | "
-- territoire : zone géographique couverte
-- points_vigilance : 3-4 points d'attention MAX — MAX 400 caractères, séparés par " | "
-- contact : coordonnées de contact (email, téléphone, URL)
-- programme_europeen : nom du programme européen uniquement si explicitement mentionné, sinon "Information non fournie"
+nature
+UNE valeur parmi : Subvention | Prêt | Avance remboursable | Garantie | Crédit d'impôt | Investissement en fonds propres | Aide en nature | Exonération fiscale
 
-RÈGLES GÉNÉRALES :
-- Si un cahier des charges (CDC) est fourni, il fait AUTORITÉ sur la page web — analyse-le en PRIORITÉ
-- Toute information absente = "Information non fournie"
-- Pour les listes : utiliser " | " comme séparateur, JAMAIS de tirets ni de puces ni de virgules
-- Réponse UNIQUEMENT en JSON valide, aucun texte avant ou après, avec ces clés exactes :
+beneficiaire
+LISTE ABSOLUMENT TOUS les types de bénéficiaires éligibles, séparés par " | ".
+Table de correspondance obligatoire :
+  • Entreprise, société, SAS, SARL, SA, holding → Entreprise
+  • Selon taille explicitement mentionnée → ajouter aussi PME, TPE, ETI, GE, Start-up
+  • Collectivité, commune, EPCI, agglo, métropole, département, région, syndicat mixte, établissement public → Collectivité
+  • Association, fondation, ONG, fédération → Association
+  • Exploitant agricole, agriculteur, coopérative agricole, groupement agricole → Agriculteur
+  • Université, laboratoire, organisme de recherche, EPIC de recherche → Chercheur
+  • SCOP, SCIC, coopérative, structure ESS → ESS
+  • Personne physique, ménage, propriétaire, locataire, particulier → Particulier
+IMPORTANT : si le texte dit "collectivités et leurs opérateurs publics et privés" → inclure Collectivité + Entreprise + Association
+
+type_depot
+Applique ces règles STRICTEMENT DANS L'ORDRE — s'arrête à la première qui s'applique :
+  1. Le dispositif est FERMÉ / CLOS / EXPIRÉ, ou la date limite est DÉJÀ PASSÉE → "Clôturé"
+  2. Une DATE LIMITE DE DÉPÔT explicite et FUTURE est mentionnée → mettre cette date directement (ex: "30/10/2026")
+  3. Renouvellement en attente, prochain appel annoncé → "En attente de renouvellement"
+  4. Dépôt continu, guichet permanent, aucune échéance → "Au fil de l'eau"
+ATTENTION RÈGLE 2 : si une date limite existe, mettre la date elle-même dans type_depot, PAS le mot "Date".
+"au fil de l'eau" dans le texte peut désigner le PROCESSUS D'INSTRUCTION et non le dépôt — ne pas confondre.
+
+date_fermeture
+Date limite de candidature (JJ/MM/AAAA) si future, ou date de clôture passée si clôturé.
+Si type_depot contient déjà la date → répéter la même date ici.
+Sinon : "Information non fournie"
+
+objectif
+1 phrase synthétique, MAX 180 caractères. Ce que le dispositif finance et pourquoi.
+
+types_depenses
+Valeurs parmi [Investissement | Fonctionnement | Étude] séparées par " | "
+
+operations_eligibles
+Actions et projets financés. MAX 400 caractères, séparés par " | ". Extraits du contenu réel.
+
+depenses_eligibles
+Postes de dépenses couverts. MAX 450 caractères, séparés par " | ". Extraits du contenu réel.
+
+criteres_eligibilite
+Conditions d'éligibilité clés. MAX 350 caractères, séparés par " | ". Conditions réelles du texte.
+
+depenses_ineligibles
+Ce qui est explicitement exclu. MAX 300 caractères. Uniquement ce qui est écrit noir sur blanc.
+
+montants_taux
+Montants min/max, taux, plafonds. MAX 380 caractères. Chiffres réels extraits du texte.
+
+thematiques
+Sujets couverts séparés par " | "
+
+territoire
+Zone géographique couverte (région, national, européen...)
+
+points_vigilance
+⚠️ RÈGLE STRICTE : uniquement des EXIGENCES SPÉCIFIQUES et CONTRAINTES CRITIQUES du dispositif.
+Exemples acceptés : délai de dépôt imposé | seuil minimum de dépenses | interdiction de cumul | obligation de contact préalable | règle de minimis | condition de partenariat obligatoire
+Exemples REFUSÉS : "consulter le site pour plus d'infos" | "vérifier les conditions" | "document PDF difficile à lire" | tout commentaire sur la qualité de la source
+MAX 400 caractères, 3-4 points séparés par " | ". Si aucune contrainte spécifique trouvée → "Information non fournie"
+
+contact
+Coordonnées réelles : nom du service, email, téléphone, URL de dépôt. Extraits du texte.
+
+programme_europeen
+Nom du programme européen si explicitement mentionné (ex: "FEDER 2021-2027 Bretagne"). Sinon "Information non fournie"
+
+━━━ RÈGLES FINALES ━━━
+• Information absente ou incertaine = "Information non fournie" — jamais d'invention
+• Séparateur de listes = " | " — jamais de tirets, puces, virgules, ou sauts de ligne
+• Réponse UNIQUEMENT en JSON valide, sans texte avant ni après, clés exactes :
 guichet_financeur, guichet_instructeur, titre, nature, beneficiaire, type_depot,
 date_fermeture, objectif, types_depenses, operations_eligibles, depenses_eligibles,
 criteres_eligibilite, depenses_ineligibles, montants_taux, thematiques, territoire,
@@ -895,20 +944,26 @@ def generate_dispositif_pptx(data):
         elif sid == 26:
             # NATURE / FINANCEUR / INSTRUCTEUR / DEPOT
             paras = list(shape.text_frame.paragraphs)
-            # Normaliser le dépôt aux 4 valeurs autorisées
-            DEPOT_VALEURS = ["Au fil de l'eau", "Date", "Clôturé", "En attente de renouvellement"]
-            raw_depot = safe(data.get('type_depot')).lower()
-            if 'fil' in raw_depot or 'continu' in raw_depot or 'guichet' in raw_depot:
-                depot_txt = "Au fil de l'eau"
-            elif 'clôtur' in raw_depot or 'clotur' in raw_depot or 'fermé' in raw_depot or 'ferm' in raw_depot:
-                depot_txt = "Clôturé"
-            elif 'renouvell' in raw_depot or 'attente' in raw_depot:
-                depot_txt = "En attente de renouvellement"
-            else:
-                depot_txt = "Date"
+            # Construire le texte de dépôt
+            import re as _re
+            raw_depot = safe(data.get('type_depot'))
+            raw_depot_low = raw_depot.lower()
             fc = safe(data.get('date_fermeture'))
-            if fc and fc != '—':
-                depot_txt += f' — Clôture : {fc}'
+            # Si type_depot contient directement une date, l'utiliser
+            if _re.search(r'\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}', raw_depot):
+                depot_txt = f"Clôture : {raw_depot}"
+            elif 'clôtur' in raw_depot_low or 'clotur' in raw_depot_low or 'ferm' in raw_depot_low:
+                depot_txt = f"Clôturé" + (f" — {fc}" if fc and fc != '—' else "")
+            elif 'reouvert' in raw_depot_low or 'réouvert' in raw_depot_low:
+                depot_txt = f"Réouverture : {fc}" if fc and fc != '—' else "Réouverture prévue"
+            elif 'renouvell' in raw_depot_low or 'attente' in raw_depot_low:
+                depot_txt = "En attente de renouvellement"
+            elif 'fil' in raw_depot_low or 'continu' in raw_depot_low:
+                depot_txt = "Au fil de l'eau"
+            elif fc and fc != '—':
+                depot_txt = f"Clôture : {fc}"
+            else:
+                depot_txt = raw_depot if raw_depot != '—' else "Au fil de l'eau"
             vals = [
                 safe(data.get('nature')),
                 guichet,
@@ -957,18 +1012,24 @@ def generate_dispositif_pptx(data):
         elif sid == 3:
             # NATURE / FINANCEUR / INSTRUCTEUR / DEPOT — identique slide 1
             paras = list(shape.text_frame.paragraphs)
-            raw_depot = safe(data.get('type_depot')).lower()
-            if 'fil' in raw_depot or 'continu' in raw_depot or 'guichet' in raw_depot:
-                depot_txt = "Au fil de l'eau"
-            elif 'clôtur' in raw_depot or 'clotur' in raw_depot or 'fermé' in raw_depot or 'ferm' in raw_depot:
-                depot_txt = "Clôturé"
-            elif 'renouvell' in raw_depot or 'attente' in raw_depot:
-                depot_txt = "En attente de renouvellement"
-            else:
-                depot_txt = "Date"
+            import re as _re2
+            raw_depot = safe(data.get('type_depot'))
+            raw_depot_low = raw_depot.lower()
             fc = safe(data.get('date_fermeture'))
-            if fc and fc != '—':
-                depot_txt += f' — Clôture : {fc}'
+            if _re2.search(r'\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}', raw_depot):
+                depot_txt = f"Clôture : {raw_depot}"
+            elif 'clôtur' in raw_depot_low or 'clotur' in raw_depot_low or 'ferm' in raw_depot_low:
+                depot_txt = f"Clôturé" + (f" — {fc}" if fc and fc != '—' else "")
+            elif 'reouvert' in raw_depot_low or 'réouvert' in raw_depot_low:
+                depot_txt = f"Réouverture : {fc}" if fc and fc != '—' else "Réouverture prévue"
+            elif 'renouvell' in raw_depot_low or 'attente' in raw_depot_low:
+                depot_txt = "En attente de renouvellement"
+            elif 'fil' in raw_depot_low or 'continu' in raw_depot_low:
+                depot_txt = "Au fil de l'eau"
+            elif fc and fc != '—':
+                depot_txt = f"Clôture : {fc}"
+            else:
+                depot_txt = raw_depot if raw_depot != '—' else "Au fil de l'eau"
             vals2 = [
                 safe(data.get('nature')),
                 guichet,
@@ -3417,14 +3478,35 @@ async function runBatchCollect() {
           clearInterval(batchPollTimer);
           var saved = results.filter(function(r){ return r.status === 'saved'; }).length;
           var dupes = results.filter(function(r){ return r.status === 'duplicate'; }).length;
-          var errors = results.filter(function(r){ return r.status === 'error'; }).length;
-          var summary = '<div style="padding:10px 14px;background:rgba(30,143,84,0.08);border-radius:8px;border:1px solid rgba(30,143,84,0.2);margin-bottom:10px;">';
+          var errorList = results.filter(function(r){ return r.status === 'error'; });
+          var errors = errorList.length;
+
+          var summary = '<div style="padding:10px 14px;background:rgba(30,143,84,0.08);border-radius:8px;border:1px solid rgba(30,143,84,0.2);margin-bottom:8px;">';
           summary += '<span style="font-size:12px;font-weight:700;color:#1a7a3e;">Terminé — ' + saved + ' sauvegardé(s)</span>';
           if (dupes) summary += ' · <span style="font-size:11px;color:var(--muted);">' + dupes + ' doublon(s)</span>';
           if (errors) summary += ' · <span style="font-size:11px;color:#c8392b;">' + errors + ' erreur(s)</span>';
           summary += '</div>';
+
+          if (errors) {
+            summary += '<div style="margin-bottom:8px;">';
+            summary += '<div style="font-size:10.5px;font-weight:700;color:#c8392b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;">Sources non collectées</div>';
+            errorList.forEach(function(r) {
+              var msg = (r.error || 'Erreur inconnue').substring(0, 80);
+              var shortUrl = r.url.replace(/^https?:\/\//, '').substring(0, 55);
+              summary += '<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 10px;background:rgba(200,57,43,0.05);border:1px solid rgba(200,57,43,0.15);border-radius:6px;margin-bottom:4px;">';
+              summary += '<span style="flex-shrink:0;font-size:13px;">❌</span>';
+              summary += '<div style="flex:1;min-width:0;">';
+              summary += '<div style="font-size:11px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + r.url + '">' + shortUrl + '</div>';
+              summary += '<div style="font-size:10px;color:#c8392b;margin-top:2px;">' + msg + '</div>';
+              summary += '</div>';
+              summary += '<a href="' + r.url + '" target="_blank" style="flex-shrink:0;font-size:10px;color:var(--accent);opacity:0.7;margin-top:1px;">↗</a>';
+              summary += '</div>';
+            });
+            summary += '</div>';
+          }
+
           if (job.pkg_id) {
-            summary += '<div style="padding:9px 14px;background:var(--lime-bg);border-radius:8px;border:1px solid rgba(200,232,78,0.35);font-size:11px;color:var(--accent);font-weight:600;margin-bottom:10px;">&#x1F4E6; Package &laquo;' + (job.pkg_name || '') + '&raquo; : ' + saved + ' dispositif(s)</div>';
+            summary += '<div style="padding:9px 14px;background:var(--lime-bg);border-radius:8px;border:1px solid rgba(200,232,78,0.35);font-size:11px;color:var(--accent);font-weight:600;margin-bottom:8px;">&#x1F4E6; Package &laquo;' + (job.pkg_name || '') + '&raquo; : ' + saved + ' dispositif(s)</div>';
             loadPackages();
           }
           area.innerHTML = summary + area.innerHTML;
@@ -9796,7 +9878,12 @@ def collect_batch_status(job_id):
 @app.route('/api/dispositifs', methods=['GET'])
 def get_dispositifs():
     conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT * FROM dispositifs ORDER BY collected_at DESC")
+    # Deduplicate by source_url — keep the most recently collected version per URL
+    cur.execute("""
+        SELECT DISTINCT ON (COALESCE(source_url, id::text)) *
+        FROM dispositifs
+        ORDER BY COALESCE(source_url, id::text), collected_at DESC
+    """)
     rows = cur.fetchall(); cur.close(); conn.close()
     result = []
     for r in rows:
