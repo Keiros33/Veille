@@ -2229,7 +2229,13 @@ body {
           <button onclick="exportPackagePptx()" style="background:var(--accent);color:var(--lime);border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">📊 Exporter PPTX</button>
           <button onclick="deleteCurrentPackage()" style="background:none;border:1.5px solid rgba(200,57,43,0.3);border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;color:#c8392b;font-family:'DM Sans',sans-serif;">🗑</button>
         </div>
-        <div id="pkg-detail-grid" style="flex:1;overflow-y:auto;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;"></div>
+        <!-- Sub-tabs -->
+        <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface2);">
+          <button id="pkg-tab-disp" onclick="switchPkgTab('disp')" style="padding:9px 18px;font-size:11px;font-weight:700;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--surface);color:var(--accent);border-bottom:2px solid var(--accent);">📦 Dispositifs</button>
+          <button id="pkg-tab-logs" onclick="switchPkgTab('logs')" style="padding:9px 18px;font-size:11px;font-weight:700;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;background:transparent;color:var(--muted);border-bottom:2px solid transparent;">🔴 Erreurs <span id="pkg-logs-badge" style="display:none;background:#c8392b;color:#fff;border-radius:100px;padding:1px 6px;font-size:10px;margin-left:4px;"></span></button>
+        </div>
+        <div id="pkg-pane-disp" style="flex:1;overflow-y:auto;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;"></div>
+        <div id="pkg-pane-logs" style="display:none;flex:1;overflow-y:auto;padding:16px 20px;"></div>
       </div>
     </div>
 
@@ -2281,6 +2287,7 @@ body {
       <button id="mc-tab-url" onclick="switchMcTab('url')" style="flex:1;padding:11px 0;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--surface);color:var(--accent);border-bottom:2px solid var(--accent);">🔗 Lien</button>
       <button id="mc-tab-cdc" onclick="switchMcTab('cdc')" style="flex:1;padding:11px 0;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;background:transparent;color:var(--muted);border-bottom:2px solid transparent;">📄 CDC</button>
       <button id="mc-tab-excel" onclick="switchMcTab('excel')" style="flex:1;padding:11px 0;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;background:transparent;color:var(--muted);border-bottom:2px solid transparent;">📊 Excel (bundle)</button>
+      <button id="mc-tab-text" onclick="switchMcTab('text')" style="flex:1;padding:11px 0;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;background:transparent;color:var(--muted);border-bottom:2px solid transparent;">✏️ Texte</button>
     </div>
 
     <!-- TAB : Lien unique -->
@@ -2363,6 +2370,26 @@ body {
       <div style="padding:13px 24px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;flex-shrink:0;">
         <button onclick="closeManualCollect()" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Annuler</button>
         <button id="mc-batch-btn" onclick="runBatchCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:7px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;" disabled>🚀 Lancer la collecte</button>
+      </div>
+    </div>
+
+    <!-- TAB : Texte / Scrape manuel -->
+    <div id="mc-pane-text" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+      <div style="padding:14px 24px 12px;border-bottom:1px solid var(--border);flex-shrink:0;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Collez le contenu texte d un dispositif — utile pour les sites JS ou les pages inaccessibles au scraping.</div>
+        <input id="mc-text-url" type="url" placeholder="URL source (optionnel)" style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:9px 14px;font-size:12px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;margin-bottom:10px;">
+        <textarea id="mc-text-area" placeholder="Collez ici le contenu complet de la page (texte brut, copier-coller depuis le navigateur)…" style="width:100%;height:160px;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;resize:vertical;box-sizing:border-box;"></textarea>
+      </div>
+      <div id="mc-text-result" style="padding:16px 24px;flex:1;overflow-y:auto;min-height:80px;">
+        <div style="text-align:center;color:var(--muted);font-size:12px;padding:20px 0;">Collez du texte puis cliquez sur Analyser.</div>
+      </div>
+      <div style="padding:13px 24px;border-top:1px solid var(--border);display:flex;gap:9px;justify-content:flex-end;flex-shrink:0;">
+        <button onclick="closeManualCollect()" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Annuler</button>
+        <button id="mc-text-run-btn" onclick="runTextCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:7px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Analyser</button>
+      </div>
+      <div id="mc-text-footer" style="display:none;padding:13px 24px;border-top:1px solid var(--border);display:none;gap:9px;justify-content:flex-end;flex-shrink:0;">
+        <button onclick="closeManualCollect()" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Annuler</button>
+        <button id="mc-text-save-btn" onclick="saveTextCollect()" style="background:var(--accent);color:var(--lime);border:none;border-radius:7px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Sauvegarder</button>
       </div>
     </div>
 
@@ -3212,6 +3239,11 @@ function openManualCollect() {
   document.getElementById('mc-cdc-dropzone').style.borderColor = 'var(--border)';
   document.getElementById('mc-cdc-dropzone').style.background = '';
   if (document.getElementById('mc-cdc-file')) document.getElementById('mc-cdc-file').value = '';
+  mc_text_data = null;
+  document.getElementById('mc-text-url').value = '';
+  document.getElementById('mc-text-area').value = '';
+  document.getElementById('mc-text-result').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:20px 0;">Collez du texte puis cliquez sur Analyser.</div>';
+  document.getElementById('mc-text-footer').style.display = 'none';
   switchMcTab('url');
   document.getElementById('manual-collect-modal').style.display = 'flex';
   setTimeout(function(){ document.getElementById('mc-url-input').focus(); }, 100);
@@ -3292,9 +3324,63 @@ async function saveManualCollect() {
   btn.textContent = 'Sauvegarder';
 }
 
+// ── TEXT / SCRAPE MANUEL ─────────────────────────────────────────────
+var mc_text_data = null;
+
+async function runTextCollect() {
+  var text = document.getElementById('mc-text-area').value.trim();
+  if (!text) { showToast('Collez du contenu a analyser'); return; }
+  var btn = document.getElementById('mc-text-run-btn');
+  btn.disabled = true; btn.textContent = 'Analyse en cours…';
+  document.getElementById('mc-text-result').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:32px;color:var(--muted);"><div class="spinner"></div><div style="font-size:12px;">Analyse IA… (15-25 s)</div></div>';
+  var sourceUrl = document.getElementById('mc-text-url').value.trim();
+  try {
+    var res = await fetch(API + '/api/collect-text', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ text: text, source_url: sourceUrl })
+    });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error);
+    mc_text_data = data;
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;">';
+    MC_FIELDS.forEach(function(f) {
+      var val = data[f[1]];
+      var empty = !val || val === 'Information non fournie';
+      var disp = empty ? '<em style="color:var(--muted2);">Non renseigne</em>' : val;
+      html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;' + (empty ? 'opacity:0.55;' : '') + '">';
+      html += '<div style="font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">' + f[0] + '</div>';
+      html += '<div style="font-size:12px;line-height:1.4;">' + disp + '</div></div>';
+    });
+    html += '</div>';
+    document.getElementById('mc-text-result').innerHTML = html;
+    document.getElementById('mc-text-footer').style.display = 'flex';
+  } catch(e) {
+    document.getElementById('mc-text-result').innerHTML = '<div style="padding:14px;background:rgba(200,57,43,0.07);border:1px solid rgba(200,57,43,0.2);border-radius:8px;color:#a0291e;font-size:12px;">Erreur : ' + e.message + '</div>';
+  }
+  btn.disabled = false; btn.textContent = 'Analyser';
+}
+
+async function saveTextCollect() {
+  if (!mc_text_data) return;
+  var btn = document.getElementById('mc-text-save-btn');
+  btn.disabled = true; btn.textContent = 'Sauvegarde…';
+  try {
+    var res = await fetch(API + '/api/dispositifs', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(mc_text_data)
+    });
+    var saved = await res.json();
+    showToast(saved.status === 'duplicate' ? 'Deja dans la base !' : 'Dispositif ajoute !');
+    if (saved.status !== 'duplicate') { closeManualCollect(); loadDispositifs(); }
+  } catch(e) { showToast('Erreur : ' + e.message); }
+  btn.disabled = false; btn.textContent = 'Sauvegarder';
+}
+
 // ── MODAL TABS ────────────────────────────────────────────────────────
 function switchMcTab(tab) {
-  var tabs = ['url', 'cdc', 'excel'];
+  var tabs = ['url', 'cdc', 'excel', 'text'];
   tabs.forEach(function(t) {
     var pane = document.getElementById('mc-pane-' + t);
     var btn  = document.getElementById('mc-tab-' + t);
@@ -3576,6 +3662,65 @@ async function loadPackages() {
   }
 }
 
+function switchPkgTab(tab) {
+  var tabs = ['disp', 'logs'];
+  tabs.forEach(function(t) {
+    var pane = document.getElementById('pkg-pane-' + t);
+    var btn = document.getElementById('pkg-tab-' + t);
+    if (!pane || !btn) return;
+    var active = t === tab;
+    pane.style.display = active ? (t === 'disp' ? 'grid' : 'block') : 'none';
+    btn.style.background = active ? 'var(--surface)' : 'transparent';
+    btn.style.color = active ? 'var(--accent)' : 'var(--muted)';
+    btn.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
+  });
+  if (tab === 'logs') loadPkgLogs();
+}
+
+async function loadPkgLogs() {
+  var pane = document.getElementById('pkg-pane-logs');
+  pane.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:24px;text-align:center;">Chargement…</div>';
+  try {
+    var res = await fetch(API + '/api/packages/' + currentPkgId + '/logs');
+    var jobs = await res.json();
+    var allErrors = [];
+    jobs.forEach(function(j) {
+      (j.errors || []).forEach(function(e) {
+        allErrors.push({ job_id: j.job_id, date: j.created_at, url: e.url, error: e.error || 'Erreur inconnue' });
+      });
+    });
+    var badge = document.getElementById('pkg-logs-badge');
+    if (allErrors.length) {
+      badge.textContent = allErrors.length;
+      badge.style.display = 'inline';
+    } else {
+      badge.style.display = 'none';
+    }
+    if (!allErrors.length) {
+      pane.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><div style="font-size:28px;margin-bottom:8px;">✅</div><div style="font-size:12px;font-weight:600;">Aucune erreur sur ce package</div></div>';
+      return;
+    }
+    var html = '<div style="font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">' + allErrors.length + ' source(s) non collectée(s)</div>';
+    allErrors.forEach(function(e) {
+      var d = e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '';
+      var shortUrl = (e.url || '').replace(/^https?:\/\//, '').substring(0, 60);
+      html += '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:rgba(200,57,43,0.04);border:1px solid rgba(200,57,43,0.15);border-radius:8px;margin-bottom:6px;">';
+      html += '<span style="font-size:16px;flex-shrink:0;">❌</span>';
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">';
+      html += '<span style="font-size:11px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" title="' + (e.url||'') + '">' + shortUrl + '</span>';
+      if (e.url) html += '<a href="' + e.url + '" target="_blank" style="font-size:10px;color:var(--accent);flex-shrink:0;">↗ Ouvrir</a>';
+      html += '</div>';
+      html += '<div style="font-size:10.5px;color:#c8392b;">' + e.error.substring(0, 100) + '</div>';
+      if (d) html += '<div style="font-size:10px;color:var(--muted);margin-top:2px;">Collecte du ' + d + '</div>';
+      html += '</div></div>';
+    });
+    pane.innerHTML = html;
+  } catch(err) {
+    pane.innerHTML = '<div style="color:#c8392b;font-size:12px;padding:16px;">Erreur chargement logs</div>';
+  }
+}
+
 async function openPkgDetail(id, name) {
   currentPkgId = id;
   document.getElementById('pkg-list').style.display = 'none';
@@ -3583,13 +3728,15 @@ async function openPkgDetail(id, name) {
   detail.style.display = 'flex';
   document.getElementById('pkg-detail-name').textContent = name;
   document.getElementById('pkg-detail-count').textContent = '';
-  document.getElementById('pkg-detail-grid').innerHTML = '<div class="spinner" style="margin:32px auto;display:block;"></div>';
+  switchPkgTab('disp');
+  document.getElementById('pkg-logs-badge').style.display = 'none';
+  document.getElementById('pkg-pane-disp').innerHTML = '<div class="spinner" style="margin:32px auto;display:block;"></div>';
   try {
     var res = await fetch(API + '/api/packages/' + id + '/dispositifs');
     var disps = await res.json();
     document.getElementById('pkg-detail-count').textContent = disps.length + ' dispositif' + (disps.length > 1 ? 's' : '');
     if (!disps.length) {
-      document.getElementById('pkg-detail-grid').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:32px;">Aucun dispositif dans ce package</div>';
+      document.getElementById('pkg-pane-disp').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:32px;">Aucun dispositif dans ce package</div>';
       return;
     }
     var html = '';
@@ -3604,9 +3751,15 @@ async function openPkgDetail(id, name) {
       if (d.source_url) html += '<a href="' + d.source_url + '" target="_blank" style="display:block;margin-top:8px;font-size:10px;color:var(--accent);opacity:0.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + d.source_url + '</a>';
       html += '</div>';
     });
-    document.getElementById('pkg-detail-grid').innerHTML = html;
+    document.getElementById('pkg-pane-disp').innerHTML = html;
+    // Load logs badge in background
+    fetch(API + '/api/packages/' + id + '/logs').then(function(r){ return r.json(); }).then(function(jobs) {
+      var total = jobs.reduce(function(acc, j){ return acc + (j.errors||[]).length; }, 0);
+      var badge = document.getElementById('pkg-logs-badge');
+      if (total) { badge.textContent = total; badge.style.display = 'inline'; }
+    }).catch(function(){});
   } catch(e) {
-    document.getElementById('pkg-detail-grid').innerHTML = '<div style="color:#c8392b;font-size:12px;">Erreur</div>';
+    document.getElementById('pkg-pane-disp').innerHTML = '<div style="color:#c8392b;font-size:12px;">Erreur</div>';
   }
 }
 
@@ -9464,6 +9617,35 @@ def merge_packages():
     conn.commit(); cur.close(); conn.close()
     return jsonify({'status': 'merged', 'new_id': new_id, 'name': new_name})
 
+
+@app.route('/api/packages/<int:pid>/logs', methods=['GET'])
+def get_package_logs(pid):
+    """Return error logs from batch jobs linked to this package."""
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("""
+        SELECT job_id, created_at, total, done, results
+        FROM batch_jobs
+        WHERE pkg_id = %s
+        ORDER BY created_at DESC
+        LIMIT 10
+    """, (pid,))
+    rows = cur.fetchall(); cur.close(); conn.close()
+    logs = []
+    for r in rows:
+        results = r['results'] or []
+        if isinstance(results, str):
+            import json as _json
+            results = _json.loads(results)
+        errors = [x for x in results if x.get('status') == 'error']
+        logs.append({
+            'job_id': r['job_id'],
+            'created_at': r['created_at'].isoformat() if r['created_at'] else '',
+            'total': r['total'],
+            'done': r['done'],
+            'errors': errors
+        })
+    return jsonify(logs)
+
 @app.route('/api/packages/<int:pid>/export-cdc', methods=['GET'])
 def export_package_cdc(pid):
     """Download all CDC documents for a package as a ZIP."""
@@ -9645,6 +9827,42 @@ def _job_create(job_id, total, pkg_id, pkg_name):
     except Exception as e:
         log.error(f"job_create error: {e}")
 
+
+
+@app.route('/api/collect-text', methods=['POST'])
+def collect_text():
+    """Analyze raw pasted text content with Claude."""
+    if not ANTHROPIC_API_KEY:
+        return jsonify({'error': 'ANTHROPIC_API_KEY not configured'}), 500
+    data = request.get_json()
+    text = (data.get('text') or '').strip()
+    source_url = (data.get('source_url') or '').strip()
+    if not text:
+        return jsonify({'error': 'Contenu vide'}), 400
+    try:
+        url_mention = f"\nURL source : {source_url}" if source_url else ""
+        user_content = f"Analyse ce contenu et remplis la grille.{url_mention}\n[Source : scrape_manuel]\n\nContenu :\n{text[:8000]}"
+        payload = json.dumps({
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 2000,
+            "system": COLLECT_PROMPT,
+            "messages": [{"role": "user", "content": user_content}]
+        }).encode()
+        req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01"
+        }, method="POST")
+        with urlopen(req, timeout=30) as resp:
+            claude_data = json.loads(resp.read())
+        txt = claude_data["content"][0]["text"].strip()
+        m = re.search(r'\{[\s\S]*\}', txt)
+        result = json.loads(m.group() if m else txt)
+        result['source_url'] = source_url or ''
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"collect_text error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/collect-cdc', methods=['POST'])
 def collect_cdc():
