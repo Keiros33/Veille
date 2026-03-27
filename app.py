@@ -9567,7 +9567,7 @@ def delete_package(pid):
 @app.route('/api/packages/<int:pid>/dispositifs', methods=['GET'])
 def get_package_dispositifs(pid):
     conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT * FROM dispositifs WHERE package_id=%s ORDER BY collected_at DESC", (pid,))
+    cur.execute("SELECT * FROM dispositifs WHERE package_id=%s ORDER BY id ASC", (pid,))
     rows = cur.fetchall(); cur.close(); conn.close()
     result = []
     for r in rows:
@@ -9609,7 +9609,7 @@ def merge_packages():
             points_vigilance, contact, programme_europeen, source_url, cdc_url, %s
         FROM dispositifs
         WHERE package_id IN (%s, %s)
-        ORDER BY COALESCE(source_url, gen_random_uuid()::text), collected_at DESC
+        ORDER BY id ASC, COALESCE(source_url, gen_random_uuid()::text), collected_at DESC
     """, (new_id, pkg_a, pkg_b))
     # Delete source packages (dispositifs cascade to SET NULL, already moved)
     cur.execute("DELETE FROM dispositifs WHERE package_id IN (%s, %s)", (pkg_a, pkg_b))
@@ -9698,7 +9698,7 @@ def export_package_pptx(pid):
     pkg = cur.fetchone()
     if not pkg:
         return jsonify({'error': 'Package introuvable'}), 404
-    cur.execute("SELECT * FROM dispositifs WHERE package_id=%s ORDER BY collected_at DESC", (pid,))
+    cur.execute("SELECT * FROM dispositifs WHERE package_id=%s ORDER BY id ASC", (pid,))
     rows = cur.fetchall(); cur.close(); conn.close()
     if not rows:
         return jsonify({'error': 'Package vide'}), 400
