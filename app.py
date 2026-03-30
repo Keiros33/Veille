@@ -814,57 +814,20 @@ def generate_dispositif_pptx(data):
     ]
 
     def fetch_logo_bytes(guichet_name):
-        """Essaie Clearbit Logo API, fallback sur PNG embarqué."""""
+        """Retourne le logo embarque (LOGO_B64) si disponible, sinon None. Pas de reseau."""
         import unicodedata, base64 as b64mod2
-
         nl = unicodedata.normalize('NFD', (guichet_name or '').lower())
         nl = ''.join(c for c in nl if unicodedata.category(c) != 'Mn')
-
-        # Trouver la clé interne
         matched_key = None
         for keywords, key in LOGO_KEYS:
             if any(kw in nl for kw in keywords):
                 matched_key = key
                 break
-
-        # ── Logo : LOGO_B64 embarqué en priorité, Google favicon en fallback ──
         if matched_key and matched_key in LOGO_B64:
             return b64mod2.b64decode(LOGO_B64[matched_key]), 'png'
-
-        # Fallback : Google favicon service (sz=128, très fiable)
-        try:
-            domain = None
-            DOMAIN_MAP = {
-                'ademe': 'ademe.fr', 'bpifrance': 'bpifrance.fr',
-                'anah': 'anah.fr', 'anct': 'anct.gouv.fr',
-                'cerema': 'cerema.fr', 'banque_territoires': 'banquedesterritoires.fr',
-                'caisse_depots': 'caissedesdepots.fr', 'france_2030': 'gouvernement.fr',
-                'anr': 'anr.fr', 'dreal': 'ecologie.gouv.fr',
-                'dreets': 'travail.gouv.fr', 'carsat': 'carsat.fr',
-                'urssaf': 'urssaf.fr', 'msa': 'msa.fr',
-                'europe': 'europa.eu', 'feader': 'europe-en-france.gouv.fr',
-                'feder': 'europe-en-france.gouv.fr', 'fse': 'europe-en-france.gouv.fr',
-                'aura': 'auvergnerhonealpes.fr', 'bretagne': 'bretagne.bzh',
-                'normandie': 'normandie.fr', 'occitanie': 'laregion.fr',
-                'nouvelle_aquitaine': 'nouvelle-aquitaine.fr', 'grand_est': 'grandest.fr',
-                'hauts_france': 'hautsdefrance.fr', 'ile_france': 'iledefrance.fr',
-                'paca': 'maregionsud.fr', 'pays_loire': 'paysdelaloire.fr',
-                'bourgogne_fc': 'bourgognefranchecomte.fr', 'centre_val': 'centre-valdeloire.fr',
-            }
-            if matched_key and matched_key in DOMAIN_MAP:
-                domain = DOMAIN_MAP[matched_key]
-            if domain:
-                favicon_url = f'https://www.google.com/s2/favicons?domain={domain}&sz=128'
-                req_fav = ureq.Request(favicon_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with ureq.urlopen(req_fav, timeout=4) as resp_fav:
-                    img_data = resp_fav.read()
-                    if len(img_data) > 200:
-                        return img_data, 'png'
-        except Exception:
-            pass
-
         return None, None
 
+    
     def add_logo_image(slide, logo_textbox_id, img_bytes, ext):
         """Replace the logo text box with the actual logo image."""
         from pptx.util import Emu
@@ -1063,19 +1026,23 @@ def generate_dispositif_pptx(data):
 @app.route('/api/dispositifs/<int:did>/export-pptx')
 def export_pptx(did):
     """Export a dispositif as a 2-slide PPTX."""
-    conn = get_db(); cur = conn.cursor()
-    cur.execute("SELECT * FROM dispositifs WHERE id=%s", (did,))
-    row = cur.fetchone(); cur.close(); conn.close()
-    if not row:
-        return jsonify({'error': 'not found'}), 404
-    data = dict(row)
-    # Sanitize: convert datetime/int to str so safe() never crashes
-    for k, v in list(data.items()):
-        if hasattr(v, 'isoformat'):
-            data[k] = v.isoformat()
-        elif v is not None and not isinstance(v, (str, type(None))):
-            data[k] = str(v)
+    import traceback
     try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("SELECT * FROM dispositifs WHERE id=%s", (did,))
+        row = cur.fetchone(); cur.close(); conn.close()
+        if not row:
+            return jsonify({'error': 'not found'}), 404
+        data = {}
+        for k, v in dict(row).items():
+            if v is None:
+                data[k] = ''
+            elif hasattr(v, 'isoformat'):
+                data[k] = v.isoformat()
+            elif not isinstance(v, str):
+                data[k] = str(v)
+            else:
+                data[k] = v
         pptx_bytes = generate_dispositif_pptx(data)
         titre = (data.get('titre') or 'dispositif')[:40].replace('/', '-').replace(' ', '_')
         filename = f"dispositif_{titre}.pptx"
@@ -1086,12 +1053,11 @@ def export_pptx(did):
             headers={'Content-Disposition': f'attachment; filename="{filename}"'}
         )
     except Exception as e:
-        import traceback
         tb = traceback.format_exc()
         log.error(f"PPTX export error id={did}: {e}\n{tb}")
         from flask import make_response
-        html = f"<pre style='padding:20px;color:red'><b>Erreur PPTX #{did} — {data.get('titre','?')}</b>\n\n{e}\n\n{tb}</pre>"
-        return make_response(html, 500)
+        body = f"<pre style='padding:20px;font-family:monospace;color:#c00'><b>PPTX Error — id={did}</b>\n\n{e}\n\n{tb}</pre>"
+        return make_response(body, 500)
 
 
 CONSULTANT_PAGE = """<!DOCTYPE html>
