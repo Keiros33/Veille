@@ -848,28 +848,19 @@ def generate_dispositif_pptx(data):
         h = int(0.45 * 914400)   # 0.45 inches tall
         max_w = int(2.5 * 914400) # max 2.5 inches wide
 
-        # Write img to temp file
-        suffix = '.' + ext
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
-            f.write(img_bytes)
-            tmp_path = f.name
-
         try:
-            pic = slide.shapes.add_picture(tmp_path, x, y, height=h)
-            # Constrain width
+            import io as _io2
+            pic = slide.shapes.add_picture(_io2.BytesIO(img_bytes), x, y, height=h)
             if pic.width > max_w:
                 ratio = max_w / pic.width
                 pic.width  = max_w
                 pic.height = int(pic.height * ratio)
-            # Hide the text box (set text to empty)
             if tb.has_text_frame:
                 for para in tb.text_frame.paragraphs:
                     for run in para.runs:
                         run.text = ''
         except Exception:
             pass
-        finally:
-            os.unlink(tmp_path)
 
     def set_second_para(shape, val):
         """Set text in paragraph[1] — only first run, clear extra runs."""
@@ -1033,6 +1024,8 @@ def export_pptx(did):
         row = cur.fetchone(); cur.close(); conn.close()
         if not row:
             return jsonify({'error': 'not found'}), 404
+        import re as _re_san
+        _xml_bad = _re_san.compile('[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]')
         data = {}
         for k, v in dict(row).items():
             if v is None:
@@ -1043,6 +1036,9 @@ def export_pptx(did):
                 data[k] = str(v)
             else:
                 data[k] = v
+            # Strip XML-invalid control characters that crash lxml
+            if isinstance(data[k], str):
+                data[k] = _xml_bad.sub('', data[k])
         pptx_bytes = generate_dispositif_pptx(data)
         titre = (data.get('titre') or 'dispositif')[:40].replace('/', '-').replace(' ', '_')
         filename = f"dispositif_{titre}.pptx"
@@ -2853,6 +2849,19 @@ async function loadArticles() {
 
 var collectedUrls = new Set();
 
+async function deleteDispositif(id, btn) {
+  if (!confirm('Supprimer ce dispositif definitivement ?')) return;
+  if (btn) btn.disabled = true;
+  try {
+    await fetch(API + '/api/dispositifs/' + id, { method: 'DELETE' });
+    showToast('Dispositif supprime');
+    loadDispositifs();
+  } catch(e) {
+    showToast('Erreur : ' + e.message);
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function loadDispositifs() {
   try {
     var res = await fetch(API + '/api/dispositifs');
@@ -3050,8 +3059,9 @@ function renderDispositifs(list) {
       ${!empty(d.montants_taux) ? `<div class="disp-field"><div class="disp-field-label">Montants & taux</div><div class="disp-field-val">${d.montants_taux}</div></div>` : ''}
       ${!empty(d.date_fermeture) ? `<div class="disp-field"><div class="disp-field-label">Clôture</div><div class="disp-field-val">${d.date_fermeture}</div></div>` : ''}
       <div class="disp-card-footer">
-        <button class="disp-btn primary" onclick="openDispModal(${d.id})">👁 Voir le détail</button>
+        <button class="disp-btn primary" onclick="openDispModal(${d.id})">👁 Voir</button>
         <a class="disp-btn" href="/api/dispositifs/${d.id}/export-pptx" target="_blank">📊 PPTX</a>
+        <button class="disp-btn" onclick="deleteDispositif(${d.id},this)" style="color:#c8392b;border-color:rgba(200,57,43,0.3);" title="Supprimer">🗑</button>
       </div>
     </div>`;
   }).join('');
@@ -3153,6 +3163,7 @@ function renderDispTable(list) {
       '<td>' + cell(d.contact) + '</td>' +
       '<td style="text-align:center;white-space:nowrap;">' +
         '<button class="dt-export-btn" data-did="' + (d.id||0) + '" onclick="openDispPptxById(this)">📊 PPTX</button>' +
+        '<button onclick="deleteDispositif(' + (d.id||0) + ',this)" style="margin-left:5px;background:none;border:1px solid rgba(200,57,43,0.3);border-radius:5px;padding:3px 8px;cursor:pointer;color:#c8392b;font-size:11px;">🗑</button>' +
       '</td>' +
       '</tr>';
   }).join('');
@@ -3330,10 +3341,12 @@ async function runTextCollect() {
     html += '</div>';
     document.getElementById('mc-text-result').innerHTML = html;
     document.getElementById('mc-text-footer').style.display = 'flex';
+    // Hide the Analyser button once analysis is done
+    btn.style.display = 'none';
   } catch(e) {
     document.getElementById('mc-text-result').innerHTML = '<div style="padding:14px;background:rgba(200,57,43,0.07);border:1px solid rgba(200,57,43,0.2);border-radius:8px;color:#a0291e;font-size:12px;">Erreur : ' + e.message + '</div>';
+    btn.disabled = false; btn.textContent = 'Analyser';
   }
-  btn.disabled = false; btn.textContent = 'Analyser';
 }
 
 async function saveTextCollect() {
@@ -3347,10 +3360,18 @@ async function saveTextCollect() {
       body: JSON.stringify(mc_text_data)
     });
     var saved = await res.json();
-    showToast(saved.status === 'duplicate' ? 'Deja dans la base !' : 'Dispositif ajoute !');
-    if (saved.status !== 'duplicate') { closeManualCollect(); loadDispositifs(); }
-  } catch(e) { showToast('Erreur : ' + e.message); }
-  btn.disabled = false; btn.textContent = 'Sauvegarder';
+    if (saved.status === 'duplicate') {
+      showToast('Deja dans la base !');
+      btn.disabled = false; btn.textContent = 'Sauvegarder';
+    } else {
+      showToast('Dispositif collecte et ajoute a la base !');
+      closeManualCollect();
+      loadDispositifs();
+    }
+  } catch(e) {
+    showToast('Erreur : ' + e.message);
+    btn.disabled = false; btn.textContent = 'Sauvegarder';
+  }
 }
 
 // ── MODAL TABS ────────────────────────────────────────────────────────
@@ -10096,11 +10117,11 @@ def collect_batch_status(job_id):
 @app.route('/api/dispositifs', methods=['GET'])
 def get_dispositifs():
     conn = get_db(); cur = conn.cursor()
-    # Deduplicate by source_url — keep the most recently collected version per URL
+    # Deduplicate ONLY on non-empty source_url, keep all manual entries, order by id ASC
     cur.execute("""
-        SELECT DISTINCT ON (COALESCE(source_url, id::text)) *
+        SELECT DISTINCT ON (CASE WHEN source_url IS NOT NULL AND source_url != '' THEN source_url ELSE id::text END) *
         FROM dispositifs
-        ORDER BY COALESCE(source_url, id::text), collected_at DESC
+        ORDER BY CASE WHEN source_url IS NOT NULL AND source_url != '' THEN source_url ELSE id::text END, id ASC
     """)
     rows = cur.fetchall(); cur.close(); conn.close()
     result = []
@@ -10109,6 +10130,14 @@ def get_dispositifs():
         if d.get('collected_at'): d['collected_at'] = d['collected_at'].isoformat()
         result.append(d)
     return jsonify(result)
+
+
+@app.route('/api/dispositifs/<int:did>', methods=['DELETE'])
+def delete_dispositif(did):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("DELETE FROM dispositifs WHERE id=%s", (did,))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'status': 'deleted'})
 
 @app.route('/api/dispositifs', methods=['POST'])
 def save_dispositif():
