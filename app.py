@@ -752,7 +752,7 @@ LOGO_B64 = {
 
 def generate_dispositif_pptx(data):
     """Generate 2-slide PPTX from embedded template (v3 — logo + fixed title)."""
-    import re, urllib.request as ureq
+    import re as _re_pptx, urllib.request as ureq
     from pptx.util import Pt, Emu
     from pptx.oxml.ns import qn
     from lxml import etree
@@ -945,12 +945,11 @@ def generate_dispositif_pptx(data):
             # NATURE / FINANCEUR / INSTRUCTEUR / DEPOT
             paras = list(shape.text_frame.paragraphs)
             # Construire le texte de dépôt
-            import re as _re
             raw_depot = safe(data.get('type_depot'))
             raw_depot_low = raw_depot.lower()
             fc = safe(data.get('date_fermeture'))
             # Si type_depot contient directement une date, l'utiliser
-            if _re.search(r'\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}', raw_depot):
+            if _re_pptx.search(r'\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}', raw_depot):
                 depot_txt = f"Clôture : {raw_depot}"
             elif 'clôtur' in raw_depot_low or 'clotur' in raw_depot_low or 'ferm' in raw_depot_low:
                 depot_txt = f"Clôturé" + (f" — {fc}" if fc and fc != '—' else "")
@@ -1012,11 +1011,10 @@ def generate_dispositif_pptx(data):
         elif sid == 3:
             # NATURE / FINANCEUR / INSTRUCTEUR / DEPOT — identique slide 1
             paras = list(shape.text_frame.paragraphs)
-            import re as _re2
             raw_depot = safe(data.get('type_depot'))
             raw_depot_low = raw_depot.lower()
             fc = safe(data.get('date_fermeture'))
-            if _re2.search(r'\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}', raw_depot):
+            if _re_pptx.search(r'\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}', raw_depot):
                 depot_txt = f"Clôture : {raw_depot}"
             elif 'clôtur' in raw_depot_low or 'clotur' in raw_depot_low or 'ferm' in raw_depot_low:
                 depot_txt = f"Clôturé" + (f" — {fc}" if fc and fc != '—' else "")
@@ -9500,14 +9498,17 @@ def collect_dispositif():
             "max_tokens": 2000,
             "system": COLLECT_PROMPT,
             "messages": [{"role":"user","content":user_content}]
-        }).encode()
+        }, ensure_ascii=False).encode('utf-8')
         req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={
-            "Content-Type":"application/json",
+            "Content-Type":"application/json; charset=utf-8",
             "x-api-key":ANTHROPIC_API_KEY,
             "anthropic-version":"2023-06-01"
         }, method="POST")
-        with urlopen(req, timeout=25) as resp:
-            claude_data = json.loads(resp.read())
+        with urlopen(req, timeout=30) as resp:
+            raw_resp = resp.read()
+            claude_data = json.loads(raw_resp)
+        if claude_data.get('type') == 'error':
+            raise Exception(f"Anthropic API error: {claude_data.get('error',{}).get('message','unknown')}")
         text = claude_data["content"][0]["text"].strip()
         m = re.search(r'\{[\s\S]*\}', text)
         result = json.loads(m.group() if m else text)
@@ -9517,7 +9518,8 @@ def collect_dispositif():
             result['cdc_url'] = pdf_url
         return jsonify(result)
     except Exception as e:
-        log.error(f"Collect Claude error: {e}")
+        import traceback
+        log.error(f"Collect Claude error: {e}\n{traceback.format_exc()}")
         return jsonify({'error': str(e)}),500
 
 
@@ -10027,7 +10029,7 @@ def collect_batch():
                     "max_tokens": 2000,
                     "system": COLLECT_PROMPT,
                     "messages": [{"role":"user","content":user_content}]
-                }).encode()
+                }, ensure_ascii=False).encode('utf-8')
                 req = Request("https://api.anthropic.com/v1/messages", data=payload, headers={
                     "Content-Type":"application/json",
                     "x-api-key": ANTHROPIC_API_KEY,
