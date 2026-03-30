@@ -1069,6 +1069,12 @@ def export_pptx(did):
     if not row:
         return jsonify({'error': 'not found'}), 404
     data = dict(row)
+    # Sanitize: convert datetime/int to str so safe() never crashes
+    for k, v in list(data.items()):
+        if hasattr(v, 'isoformat'):
+            data[k] = v.isoformat()
+        elif v is not None and not isinstance(v, (str, type(None))):
+            data[k] = str(v)
     try:
         pptx_bytes = generate_dispositif_pptx(data)
         titre = (data.get('titre') or 'dispositif')[:40].replace('/', '-').replace(' ', '_')
@@ -1083,7 +1089,10 @@ def export_pptx(did):
         import traceback
         tb = traceback.format_exc()
         log.error(f"PPTX export error id={did}: {e}\n{tb}")
-        return jsonify({'error': str(e), 'traceback': tb, 'data_keys': list(data.keys()), 'titre': data.get('titre','?')}), 500
+        from flask import make_response
+        html = f"<pre style='padding:20px;color:red'><b>Erreur PPTX #{did} — {data.get('titre','?')}</b>\n\n{e}\n\n{tb}</pre>"
+        return make_response(html, 500)
+
 
 CONSULTANT_PAGE = """<!DOCTYPE html>
 <html lang="fr">
