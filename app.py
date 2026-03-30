@@ -752,7 +752,7 @@ LOGO_B64 = {
 
 def generate_dispositif_pptx(data):
     """Generate 2-slide PPTX from embedded template (v3 — logo + fixed title)."""
-    import re as _re_pptx, urllib.request as ureq
+    import re, urllib.request as ureq
     from pptx.util import Pt, Emu
     from pptx.oxml.ns import qn
     from lxml import etree
@@ -949,7 +949,7 @@ def generate_dispositif_pptx(data):
             raw_depot_low = raw_depot.lower()
             fc = safe(data.get('date_fermeture'))
             # Si type_depot contient directement une date, l'utiliser
-            if _re_pptx.search(r'\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}', raw_depot):
+            if re.search(r'\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}', raw_depot):
                 depot_txt = f"Clôture : {raw_depot}"
             elif 'clôtur' in raw_depot_low or 'clotur' in raw_depot_low or 'ferm' in raw_depot_low:
                 depot_txt = f"Clôturé" + (f" — {fc}" if fc and fc != '—' else "")
@@ -1014,7 +1014,7 @@ def generate_dispositif_pptx(data):
             raw_depot = safe(data.get('type_depot'))
             raw_depot_low = raw_depot.lower()
             fc = safe(data.get('date_fermeture'))
-            if _re_pptx.search(r'\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}', raw_depot):
+            if re.search(r'\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}', raw_depot):
                 depot_txt = f"Clôture : {raw_depot}"
             elif 'clôtur' in raw_depot_low or 'clotur' in raw_depot_low or 'ferm' in raw_depot_low:
                 depot_txt = f"Clôturé" + (f" — {fc}" if fc and fc != '—' else "")
@@ -9695,6 +9695,14 @@ def export_package_cdc(pid):
 
 @app.route('/api/packages/<int:pid>/export-pptx', methods=['GET'])
 def export_package_pptx(pid):
+    try:
+     return _export_package_pptx_inner(pid)
+    except Exception as e:
+        import traceback
+        log.error(f"export_package_pptx fatal: {e}\n{traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+def _export_package_pptx_inner(pid):
     conn = get_db(); cur = conn.cursor()
     cur.execute("SELECT name FROM packages WHERE id=%s", (pid,))
     pkg = cur.fetchone()
@@ -9756,9 +9764,13 @@ def export_package_pptx(pid):
         if data.get('collected_at'): data['collected_at'] = data['collected_at'].isoformat()
         try:
             pptx_bytes = generate_dispositif_pptx(data)
-            all_pptx.append(pptx_bytes)
+            if pptx_bytes:
+                all_pptx.append(pptx_bytes)
+            else:
+                log.warning(f"Package PPTX generate returned None for id={data.get('id')}")
         except Exception as e:
-            log.warning(f"Package PPTX generate error: {e}")
+            import traceback
+            log.error(f"Package PPTX generate error id={data.get('id')} titre={data.get('titre','?')}: {e}\n{traceback.format_exc()}")
             continue
 
     if not all_pptx:
@@ -9778,13 +9790,22 @@ def export_package_pptx(pid):
 
     combined_prs = base_prs
 
-    buf = io.BytesIO()
-    combined_prs.save(buf)
-    buf.seek(0)
-    from flask import send_file
-    safe_name = pkg['name'].replace(' ', '_').replace('/', '-')[:40]
-    return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                     as_attachment=True, download_name=f"Package_{safe_name}.pptx")
+    try:
+        buf = io.BytesIO()
+        combined_prs.save(buf)
+        pptx_data = buf.getvalue()
+    except Exception as e:
+        log.error(f"Package PPTX save error: {e}")
+        import traceback; log.error(traceback.format_exc())
+        return jsonify({'error': f'Erreur sauvegarde PPTX: {str(e)}'}), 500
+
+    safe_name = (pkg['name'] or 'package').replace(' ', '_').replace('/', '-')[:40]
+    from flask import make_response
+    resp = make_response(pptx_data)
+    resp.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    resp.headers['Content-Disposition'] = f'attachment; filename="Package_{safe_name}.pptx"'
+    resp.headers['Content-Length'] = len(pptx_data)
+    return resp
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
