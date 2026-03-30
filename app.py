@@ -1080,8 +1080,10 @@ def export_pptx(did):
             headers={'Content-Disposition': f'attachment; filename="{filename}"'}
         )
     except Exception as e:
-        log.error(f"PPTX export error: {e}")
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        tb = traceback.format_exc()
+        log.error(f"PPTX export error id={did}: {e}\n{tb}")
+        return jsonify({'error': str(e), 'traceback': tb, 'data_keys': list(data.keys()), 'titre': data.get('titre','?')}), 500
 
 CONSULTANT_PAGE = """<!DOCTYPE html>
 <html lang="fr">
