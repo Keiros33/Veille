@@ -383,17 +383,6 @@ def app_page():
 def ping():
     return 'pong', 200
 
-@app.route('/api/scrape', methods=['POST'])
-def scrape_now():
-    sources_count = len(get_all_sources())
-    def run():
-        try:
-            run_scraper()
-        except Exception as e:
-            log.error(f"Manual scrape error: {e}")
-    threading.Thread(target=run, daemon=True).start()
-    return jsonify({'status': 'started', 'sources': sources_count})
-
 
 
 # ══════════════════════════════════════════════════════════════════
